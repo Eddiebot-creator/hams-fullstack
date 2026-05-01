@@ -133,25 +133,28 @@ This starts Flask in production mode.
 
 The project uses SQLite.
 
-On Render, the database will be stored at:
+On Render free tier, persistent disks are not supported. The app will still create and seed SQLite automatically, but the database can reset when the service is rebuilt or redeployed.
+
+Local/default database path:
 
 ```text
-/var/data/hams.sqlite
+server/data/hams.sqlite
 ```
 
-This path is configured in:
+For a school demo, this is acceptable because the backend seeds the database again automatically.
+
+For a real permanent database, use one of these options:
 
 ```text
-render.yaml
+Render paid web service with persistent disk
+Hosted PostgreSQL such as Neon, Supabase, or Render PostgreSQL
 ```
-
-The persistent disk keeps the SQLite database between deploys.
 
 ## Important Notes
 
 The free Render plan may sleep after inactivity. When someone opens the website after it sleeps, it may take some time to wake up.
 
-For a bigger real production system, PostgreSQL is better than SQLite. But for a school/demo project, SQLite with a persistent disk is simpler and works well.
+For a bigger real production system, PostgreSQL is better than SQLite.
 
 ## How To Test After Deployment
 

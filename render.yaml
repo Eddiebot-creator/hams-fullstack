@@ -8,10 +8,3 @@ services:
       npm install
       npm run build
     startCommand: gunicorn server.app:app
-    envVars:
-      - key: DATABASE_URL
-        value: /var/data/hams.sqlite
-    disk:
-      name: hams-sqlite-data
-      mountPath: /var/data
-      sizeGB: 1
