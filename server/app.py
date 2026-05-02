@@ -1,7 +1,7 @@
 import os
 import sqlite3
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from flask import Flask, Response, jsonify, request, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -24,7 +24,8 @@ DB_INTEGRITY_ERROR = (sqlite3.IntegrityError,) + ((pymysql.err.IntegrityError,) 
 
 def mysql_config_from_url(database_url):
     parsed = urlparse(database_url.replace("mysql+pymysql://", "mysql://", 1))
-    return {
+    query = parse_qs(parsed.query)
+    config = {
         "host": parsed.hostname,
         "port": parsed.port or 3306,
         "user": unquote(parsed.username or ""),
@@ -34,6 +35,10 @@ def mysql_config_from_url(database_url):
         "cursorclass": pymysql.cursors.DictCursor,
         "autocommit": False,
     }
+    ssl_mode = query.get("ssl-mode", query.get("ssl_mode", [""]))[0].lower()
+    if ssl_mode in {"required", "require", "true", "1"} or parsed.hostname and parsed.hostname.endswith(".aivencloud.com"):
+        config["ssl"] = {}
+    return config
 
 
 def mysql_schema(sql):
