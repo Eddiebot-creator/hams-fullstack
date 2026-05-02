@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
-import { PackagePlus, Search, Filter, MoreHorizontal } from "lucide-react";
+import { CalendarClock, ClipboardList, IdCard, PackagePlus, Search, Filter, MoreHorizontal, StickyNote, UserRound } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type LaundryBasket } from "@/src/lib/api";
@@ -82,34 +82,102 @@ export default function LaundryBaskets() {
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           onSubmit={handleAddBasket}
-          className="bg-white rounded-2xl shadow-sm border border-neutral-100 p-6 space-y-4"
+          className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden"
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Input required placeholder="Basket ID e.g. 1050" value={form.basketCode} onChange={(event) => updateForm("basketCode", event.target.value)} />
-            <Input required placeholder="Student ID" value={form.studentId} onChange={(event) => updateForm("studentId", event.target.value)} />
-            <select
-              value={form.status}
-              onChange={(event) => updateForm("status", event.target.value)}
-              className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-            >
-              <option value="Pending">Pending</option>
-              <option value="Washing">Washing</option>
-              <option value="Ready">Ready</option>
-              <option value="Picked Up">Picked Up</option>
-            </select>
-            <Input required placeholder="Received e.g. Today, 11:30 AM" value={form.receivedAt} onChange={(event) => updateForm("receivedAt", event.target.value)} />
-            <Input placeholder="Estimated finish" value={form.estimatedFinish} onChange={(event) => updateForm("estimatedFinish", event.target.value)} />
-            <Input placeholder="Notes" value={form.notes} onChange={(event) => updateForm("notes", event.target.value)} />
-            <Input placeholder="Staff name" value={form.staffName} onChange={(event) => updateForm("staffName", event.target.value)} />
+          <div className="border-b border-neutral-100 bg-neutral-50 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center">
+                <PackagePlus className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-neutral-900">New laundry basket</h2>
+                <p className="text-sm text-neutral-500">Register a drop-off and add it to laundry activity in one step.</p>
+              </div>
+            </div>
           </div>
-          {error && <p className="text-sm font-medium text-red-600">{error}</p>}
-          <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => { setIsAdding(false); setError(""); resetForm(); }}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-              {isSaving ? "Saving..." : "Save Basket"}
-            </Button>
+
+          <div className="p-6 space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-neutral-400" />
+                  Basket ID
+                </span>
+                <Input required placeholder="1050" value={form.basketCode} onChange={(event) => updateForm("basketCode", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <IdCard className="w-4 h-4 text-neutral-400" />
+                  Student ID
+                </span>
+                <Input required placeholder="240011223" value={form.studentId} onChange={(event) => updateForm("studentId", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700">Basket status</span>
+                <select
+                  value={form.status}
+                  onChange={(event) => updateForm("status", event.target.value)}
+                  className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="Washing">Washing</option>
+                  <option value="Ready">Ready</option>
+                  <option value="Picked Up">Picked Up</option>
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4 text-neutral-400" />
+                  Received time
+                </span>
+                <Input required placeholder="Today, 11:30 AM" value={form.receivedAt} onChange={(event) => updateForm("receivedAt", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4 text-neutral-400" />
+                  Estimated finish
+                </span>
+                <Input placeholder="Today, 4:00 PM" value={form.estimatedFinish} onChange={(event) => updateForm("estimatedFinish", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <UserRound className="w-4 h-4 text-neutral-400" />
+                  Staff name
+                </span>
+                <Input placeholder="Laundry Staff" value={form.staffName} onChange={(event) => updateForm("staffName", event.target.value)} />
+              </label>
+
+              <label className="space-y-2 md:col-span-2 xl:col-span-3">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <StickyNote className="w-4 h-4 text-neutral-400" />
+                  Notes
+                </span>
+                <Input placeholder="Optional note, machine assignment, or special care instruction" value={form.notes} onChange={(event) => updateForm("notes", event.target.value)} />
+              </label>
+            </div>
+
+            {error && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                {error}
+              </div>
+            )}
+          </div>
+
+          <div className="px-6 py-4 border-t border-neutral-100 bg-neutral-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-xs text-neutral-500">Saving a basket also records a Received activity entry.</p>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => { setIsAdding(false); setError(""); resetForm(); }}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                {isSaving ? "Saving..." : "Save Basket"}
+              </Button>
+            </div>
           </div>
         </motion.form>
       )}
