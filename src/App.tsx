@@ -5,6 +5,7 @@
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
+import Account from "./pages/Account";
 import Layout from "./components/layout/Layout";
 
 // Student Pages
@@ -29,6 +30,7 @@ import AdminMeals from "./pages/admin/Meals";
 import AdminStudents from "./pages/admin/Students";
 import AdminAnalytics from "./pages/admin/Analytics";
 import AdminStaff from "./pages/admin/Staff";
+import AdminAudit from "./pages/admin/Audit";
 
 function ProtectedLayout({ role }: { role: "student" | "kitchen" | "laundry" | "admin" }) {
   const user = JSON.parse(localStorage.getItem("hamsUser") || "{}");
@@ -53,6 +55,7 @@ export default function App() {
         <Route path="/kitchen" element={<ProtectedLayout role="kitchen" />}>
           <Route index element={<KitchenDashboard />} />
           <Route path="scanner" element={<KitchenScanner />} />
+          <Route path="account" element={<Account />} />
         </Route>
 
         {/* Laundry Staff Routes */}
@@ -61,6 +64,7 @@ export default function App() {
           <Route path="baskets" element={<LaundryBaskets />} />
           <Route path="reports" element={<LaundryReports />} />
           <Route path="scanner" element={<LaundryScanner />} />
+          <Route path="account" element={<Account />} />
         </Route>
 
         {/* Admin Routes */}
@@ -70,6 +74,8 @@ export default function App() {
           <Route path="students" element={<AdminStudents />} />
           <Route path="staff" element={<AdminStaff />} />
           <Route path="analytics" element={<AdminAnalytics />} />
+          <Route path="audit" element={<AdminAudit />} />
+          <Route path="account" element={<Account />} />
         </Route>
 
         <Route path="/" element={<Navigate to="/login" replace />} />

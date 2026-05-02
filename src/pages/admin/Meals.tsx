@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
-import { Clock, Download, Edit2, Plus, Trash2, UtensilsCrossed } from "lucide-react";
+import { Clock, Download, Edit2, Plus, Search, Trash2, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type Meal } from "@/src/lib/api";
@@ -15,6 +15,8 @@ const emptyForm = {
 
 export default function AdminMeals() {
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -24,6 +26,15 @@ export default function AdminMeals() {
   useEffect(() => {
     api.meals().then(setMeals).catch(console.error);
   }, []);
+
+  const filteredMeals = useMemo(() => {
+    const query = search.toLowerCase();
+    return meals.filter((meal) => {
+      const matchesSearch = meal.type.toLowerCase().includes(query) || meal.menu.toLowerCase().includes(query);
+      const matchesStatus = statusFilter === "All" || meal.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [meals, search, statusFilter]);
 
   const updateForm = (field: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -177,6 +188,29 @@ export default function AdminMeals() {
       )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden">
+        <div className="p-6 border-b border-neutral-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="relative w-full max-w-md">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-neutral-400" />
+            </div>
+            <Input
+              placeholder="Search meal or menu..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="flex h-10 w-full sm:w-44 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            <option value="All">All statuses</option>
+            <option value="Completed">Completed</option>
+            <option value="Active">Active</option>
+            <option value="Upcoming">Upcoming</option>
+          </select>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-neutral-200">
             <thead className="bg-neutral-50">
@@ -189,7 +223,7 @@ export default function AdminMeals() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-neutral-200">
-              {meals.map((meal) => (
+              {filteredMeals.map((meal) => (
                 <tr key={meal.id} className="hover:bg-neutral-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">{meal.type}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{meal.startTime} - {meal.endTime}</td>
@@ -213,7 +247,7 @@ export default function AdminMeals() {
                   </td>
                 </tr>
               ))}
-              {meals.length === 0 && (
+              {filteredMeals.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-10 text-center text-sm text-neutral-500">No meals yet.</td>
                 </tr>

@@ -8,6 +8,7 @@ import { api, type LaundryBasket } from "@/src/lib/api";
 export default function LaundryBaskets() {
   const [baskets, setBaskets] = useState<LaundryBasket[]>([]);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -30,9 +31,14 @@ export default function LaundryBaskets() {
     () =>
       baskets.filter((basket) => {
         const query = search.toLowerCase();
-        return basket.basketCode.includes(search) || basket.studentId.toLowerCase().includes(query);
+        const matchesSearch =
+          basket.basketCode.includes(search) ||
+          basket.studentId.toLowerCase().includes(query) ||
+          basket.status.toLowerCase().includes(query);
+        const matchesStatus = statusFilter === "All" || basket.status === statusFilter;
+        return matchesSearch && matchesStatus;
       }),
-    [baskets, search]
+    [baskets, search, statusFilter]
   );
 
   const updateForm = (field: keyof typeof form, value: string) => {
@@ -92,6 +98,23 @@ export default function LaundryBaskets() {
       setBaskets((current) => current.filter((item) => item.id !== basket.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to delete basket.");
+    }
+  };
+
+  const approveBasket = async (basket: LaundryBasket) => {
+    try {
+      const updated = await api.updateLaundryBasket(basket.id, {
+        basketCode: basket.basketCode,
+        studentId: basket.studentId,
+        status: "Pending",
+        receivedAt: basket.receivedAt,
+        estimatedFinish: basket.estimatedFinish ?? "",
+        notes: basket.notes ?? "Approved by laundry staff",
+        staffName: "Laundry Staff",
+      });
+      setBaskets((current) => current.map((item) => item.id === basket.id ? updated : item));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to approve basket.");
     }
   };
 
@@ -158,6 +181,7 @@ export default function LaundryBaskets() {
                   className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 >
                   <option value="Pending">Pending</option>
+                  <option value="Pending Approval">Pending Approval</option>
                   <option value="Washing">Washing</option>
                   <option value="Ready">Ready</option>
                   <option value="Picked Up">Picked Up</option>
@@ -232,10 +256,21 @@ export default function LaundryBaskets() {
               className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full"
             />
           </div>
-          <Button variant="outline" className="flex items-center">
-            <Filter className="w-4 h-4 mr-2" />
-            Filter
-          </Button>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Filter className="w-4 h-4 text-neutral-400" />
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              className="flex h-10 w-full sm:w-48 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              <option value="All">All statuses</option>
+              <option value="Pending Approval">Pending Approval</option>
+              <option value="Pending">Pending</option>
+              <option value="Washing">Washing</option>
+              <option value="Ready">Ready</option>
+              <option value="Picked Up">Picked Up</option>
+            </select>
+          </div>
         </div>
         
         <div className="overflow-x-auto">
@@ -258,7 +293,7 @@ export default function LaundryBaskets() {
                     <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       basket.status === 'Ready' ? 'bg-green-100 text-green-800' :
                       basket.status === 'Washing' ? 'bg-indigo-100 text-indigo-800' :
-                      basket.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                      basket.status === 'Pending' || basket.status === 'Pending Approval' ? 'bg-yellow-100 text-yellow-800' :
                       'bg-neutral-100 text-neutral-800'
                     }`}>
                       {basket.status}
@@ -266,6 +301,11 @@ export default function LaundryBaskets() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{basket.receivedAt}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    {basket.status === "Pending Approval" && (
+                      <button onClick={() => approveBasket(basket)} className="text-green-700 hover:text-green-900 mr-3 font-semibold">
+                        Approve
+                      </button>
+                    )}
                     <button onClick={() => startEdit(basket)} className="text-indigo-600 hover:text-indigo-900 mr-3" title="Edit basket">
                       <Edit2 className="h-4 w-4" />
                     </button>

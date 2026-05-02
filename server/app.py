@@ -45,6 +45,7 @@ def init_db():
               role TEXT NOT NULL CHECK (role IN ('student', 'kitchen', 'laundry', 'admin')),
               student_id TEXT UNIQUE,
               hostel TEXT,
+              room TEXT,
               course TEXT,
               level TEXT,
               phone TEXT,
@@ -151,6 +152,10 @@ def init_db():
             """
         )
 
+        user_columns = [row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()]
+        if "room" not in user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN room TEXT")
+
         user_count = conn.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
         if user_count == 0:
             seed_db(conn)
@@ -160,20 +165,20 @@ def init_db():
 def seed_db(conn):
     demo_password = generate_password_hash("password")
     users = [
-        ("Samuel Tokunbo", "student@example.com", demo_password, "student", "240011223", "Blue Nile, Room 402", "Computer Science", "200 Lv", "+234 8097665431", "Active"),
-        ("Kitchen Staff", "kitchen@example.com", demo_password, "kitchen", None, None, None, None, None, "Active"),
-        ("Laundry Staff", "laundry@example.com", demo_password, "laundry", None, None, None, None, None, "Active"),
-        ("Admin User", "admin@example.com", demo_password, "admin", None, None, None, None, None, "Active"),
-        ("Odafe Ojaraida", "20221068@nileuniversity.edu.ng", demo_password, "student", "20221068", "Zambezi 212", "Mass Communication", "300 Lv", "+234 8010000001", "Active"),
-        ("Raymond Chidi", "241144562@nileuniversity.edu.ng", demo_password, "student", "241144562", "Orange 105", "Software Engineering", "100 Lv", "+234 8010000002", "Active"),
-        ("Emmanuella Davies", "20234478@nileuniversity.edu.ng", demo_password, "student", "20234478", "Missisipi 210", "Economics", "200 Lv", "+234 8010000003", "Inactive"),
-        ("Emily Okoro", "211289045@nileuniversity.edu.ng", demo_password, "student", "211289045", "Nile Delta 304", "Law", "400 Lv", "+234 8010000004", "Active"),
+        ("Samuel Tokunbo", "student@example.com", demo_password, "student", "240011223", "Blue Nile", "Room 402", "Computer Science", "200 Lv", "+234 8097665431", "Active"),
+        ("Kitchen Staff", "kitchen@example.com", demo_password, "kitchen", None, None, None, None, None, None, "Active"),
+        ("Laundry Staff", "laundry@example.com", demo_password, "laundry", None, None, None, None, None, None, "Active"),
+        ("Admin User", "admin@example.com", demo_password, "admin", None, None, None, None, None, None, "Active"),
+        ("Odafe Ojaraida", "20221068@nileuniversity.edu.ng", demo_password, "student", "20221068", "Zambezi", "212", "Mass Communication", "300 Lv", "+234 8010000001", "Active"),
+        ("Raymond Chidi", "241144562@nileuniversity.edu.ng", demo_password, "student", "241144562", "Orange", "105", "Software Engineering", "100 Lv", "+234 8010000002", "Active"),
+        ("Emmanuella Davies", "20234478@nileuniversity.edu.ng", demo_password, "student", "20234478", "Missisipi", "210", "Economics", "200 Lv", "+234 8010000003", "Inactive"),
+        ("Emily Okoro", "211289045@nileuniversity.edu.ng", demo_password, "student", "211289045", "Nile Delta", "304", "Law", "400 Lv", "+234 8010000004", "Active"),
     ]
 
     conn.executemany(
         """
-        INSERT INTO users (name, email, password, role, student_id, hostel, course, level, phone, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (name, email, password, role, student_id, hostel, room, course, level, phone, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         users,
     )
@@ -394,7 +399,7 @@ def create_app():
 
         user = query_one(
             """
-            SELECT id, name, email, password, role, student_id AS studentId, hostel, course, level, phone, status
+            SELECT id, name, email, password, role, student_id AS studentId, hostel, room, course, level, phone, status
             FROM users
             WHERE email = ? AND role = ?
             """,
@@ -412,7 +417,7 @@ def create_app():
         return jsonify(
             query_all(
                 """
-                SELECT id, name, email, student_id AS studentId, hostel, course, level, phone, status
+                SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, status
                 FROM users
                 WHERE role = 'student'
                 ORDER BY name
@@ -433,8 +438,8 @@ def create_app():
             with get_connection() as conn:
                 cursor = conn.execute(
                     """
-                    INSERT INTO users (name, email, password, role, student_id, hostel, course, level, phone, status)
-                    VALUES (?, ?, ?, 'student', ?, ?, ?, ?, ?, ?)
+                    INSERT INTO users (name, email, password, role, student_id, hostel, room, course, level, phone, status)
+                    VALUES (?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         payload["name"],
@@ -442,6 +447,7 @@ def create_app():
                         generate_password_hash(payload.get("password", "password")),
                         payload["studentId"],
                         payload["hostel"],
+                        payload.get("room", ""),
                         payload["course"],
                         payload["level"],
                         payload.get("phone", ""),
@@ -455,7 +461,7 @@ def create_app():
 
         student = query_one(
             """
-            SELECT id, name, email, student_id AS studentId, hostel, course, level, phone, status
+            SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, status
             FROM users
             WHERE id = ?
             """,
@@ -510,6 +516,63 @@ def create_app():
         row = query_one("SELECT id, name, email, role, status FROM users WHERE id = ?", (staff_id,))
         return jsonify(row), 201
 
+    @app.put("/api/users/<int:user_id>/profile")
+    def update_profile(user_id):
+        payload = request.get_json(silent=True) or {}
+        user = query_one("SELECT id, role, student_id AS studentId FROM users WHERE id = ?", (user_id,))
+        if user is None:
+            return jsonify({"message": "User not found."}), 404
+
+        name = payload.get("name", "").strip()
+        phone = payload.get("phone", "").strip()
+        hostel = payload.get("hostel", "").strip()
+        room = payload.get("room", "").strip()
+        if not name:
+            return jsonify({"message": "Name is required."}), 400
+
+        with get_connection() as conn:
+            conn.execute(
+                """
+                UPDATE users
+                SET name = ?, phone = ?, hostel = ?, room = ?
+                WHERE id = ?
+                """,
+                (name, phone, hostel, room, user_id),
+            )
+            log_action(conn, user["role"], "updated profile", "user", str(user_id))
+            conn.commit()
+
+        row = query_one(
+            """
+            SELECT id, name, email, role, student_id AS studentId, hostel, room, course, level, phone, status
+            FROM users
+            WHERE id = ?
+            """,
+            (user_id,),
+        )
+        return jsonify(row)
+
+    @app.post("/api/users/<int:user_id>/password")
+    def change_password(user_id):
+        payload = request.get_json(silent=True) or {}
+        current_password = payload.get("currentPassword", "")
+        new_password = payload.get("newPassword", "")
+        user = query_one("SELECT id, password, role FROM users WHERE id = ?", (user_id,))
+
+        if user is None:
+            return jsonify({"message": "User not found."}), 404
+        if len(new_password) < 6:
+            return jsonify({"message": "New password must be at least 6 characters."}), 400
+        if not (user["password"] == current_password or check_password_hash(user["password"], current_password)):
+            return jsonify({"message": "Current password is incorrect."}), 401
+
+        with get_connection() as conn:
+            conn.execute("UPDATE users SET password = ? WHERE id = ?", (generate_password_hash(new_password), user_id))
+            log_action(conn, user["role"], "changed password", "user", str(user_id))
+            conn.commit()
+
+        return jsonify({"message": "Password updated."})
+
     @app.put("/api/students/<int:user_id>")
     def update_student(user_id):
         payload = request.get_json(silent=True) or {}
@@ -524,7 +587,7 @@ def create_app():
                 result = conn.execute(
                     """
                     UPDATE users
-                    SET name = ?, email = ?, student_id = ?, hostel = ?, course = ?, level = ?, phone = ?, status = ?
+                    SET name = ?, email = ?, student_id = ?, hostel = ?, room = ?, course = ?, level = ?, phone = ?, status = ?
                     WHERE id = ? AND role = 'student'
                     """,
                     (
@@ -532,6 +595,7 @@ def create_app():
                         payload["email"],
                         payload["studentId"],
                         payload["hostel"],
+                        payload.get("room", ""),
                         payload["course"],
                         payload["level"],
                         payload.get("phone", ""),
@@ -549,7 +613,7 @@ def create_app():
 
         student = query_one(
             """
-            SELECT id, name, email, student_id AS studentId, hostel, course, level, phone, status
+            SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, status
             FROM users
             WHERE id = ?
             """,
@@ -814,12 +878,12 @@ def create_app():
                 cursor = conn.execute(
                     """
                     INSERT INTO laundry_baskets (basket_code, student_id, status, received_at, estimated_finish, notes)
-                    VALUES (?, ?, 'Pending', ?, ?, ?)
+                    VALUES (?, ?, 'Pending Approval', ?, ?, ?)
                     """,
                     (basket_code, student_id, received_at, payload.get("estimatedFinish"), payload.get("notes", "Student laundry request")),
                 )
                 conn.execute(
-                    "INSERT INTO laundry_activity (basket_code, action, staff_name, activity_time) VALUES (?, 'Student Request', ?, ?)",
+                    "INSERT INTO laundry_activity (basket_code, action, staff_name, activity_time) VALUES (?, 'Pending Approval', ?, ?)",
                     (basket_code, "Student", received_at),
                 )
                 create_notification(conn, "laundry", "New student laundry request", f"Student {student_id} requested basket #{basket_code}.")
@@ -866,6 +930,31 @@ def create_app():
                 (role,),
             )
         return jsonify(rows)
+
+    @app.patch("/api/notifications/<int:notification_id>/read")
+    def mark_notification_read(notification_id):
+        with get_connection() as conn:
+            result = conn.execute("UPDATE notifications SET is_read = 1 WHERE id = ?", (notification_id,))
+            conn.commit()
+
+        if result.rowcount == 0:
+            return jsonify({"message": "Notification not found."}), 404
+        return jsonify({"message": "Notification marked as read."})
+
+    @app.patch("/api/notifications/read-all")
+    def mark_notifications_read():
+        payload = request.get_json(silent=True) or {}
+        role = payload.get("role", "")
+        student_id = payload.get("studentId")
+
+        with get_connection() as conn:
+            if student_id:
+                conn.execute("UPDATE notifications SET is_read = 1 WHERE user_role = ? AND student_id = ?", (role, student_id))
+            else:
+                conn.execute("UPDATE notifications SET is_read = 1 WHERE user_role = ?", (role,))
+            conn.commit()
+
+        return jsonify({"message": "Notifications marked as read."})
 
     @app.get("/api/audit-logs")
     def audit_logs():
@@ -955,7 +1044,7 @@ def create_app():
     @app.get("/api/laundry/dashboard")
     def laundry_dashboard():
         status_counts = {
-            "pending": query_one("SELECT COUNT(*) AS count FROM laundry_baskets WHERE status = 'Pending'")["count"],
+            "pending": query_one("SELECT COUNT(*) AS count FROM laundry_baskets WHERE status IN ('Pending', 'Pending Approval')")["count"],
             "washing": query_one("SELECT COUNT(*) AS count FROM laundry_baskets WHERE status = 'Washing'")["count"],
             "ready": query_one("SELECT COUNT(*) AS count FROM laundry_baskets WHERE status = 'Ready'")["count"],
             "issues": query_one("SELECT COUNT(*) AS count FROM laundry_activity WHERE action = 'Issue Reported'")["count"],
@@ -1038,7 +1127,7 @@ def create_app():
     def student_overview(student_id):
         student = query_one(
             """
-            SELECT id, name, email, student_id AS studentId, hostel, course, level, phone, status
+            SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, status
             FROM users
             WHERE role = 'student' AND student_id = ?
             """,
@@ -1051,7 +1140,8 @@ def create_app():
         meals = query_all(
             """
             SELECT m.id, m.type, m.start_time AS startTime, m.end_time AS endTime, m.menu, m.status,
-                   CASE WHEN ms.id IS NULL THEN 0 ELSE 1 END AS consumed
+                   CASE WHEN ms.id IS NULL THEN 0 ELSE 1 END AS consumed,
+                   ms.scanned_at AS scannedAt
             FROM meals m
             LEFT JOIN meal_scans ms ON ms.meal_id = m.id AND ms.student_id = ?
             ORDER BY m.id

@@ -8,6 +8,7 @@ import { api, type Student } from "@/src/lib/api";
 export default function AdminStudents() {
   const [students, setStudents] = useState<Student[]>([]);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -17,6 +18,7 @@ export default function AdminStudents() {
     studentId: "",
     email: "",
     hostel: "",
+    room: "",
     course: "",
     level: "",
     phone: "",
@@ -31,9 +33,15 @@ export default function AdminStudents() {
     () =>
       students.filter((student) => {
         const query = search.toLowerCase();
-        return student.name.toLowerCase().includes(query) || student.studentId.includes(search);
+        const matchesSearch =
+          student.name.toLowerCase().includes(query) ||
+          student.studentId.includes(search) ||
+          student.email.toLowerCase().includes(query) ||
+          student.hostel.toLowerCase().includes(query);
+        const matchesStatus = statusFilter === "All" || student.status === statusFilter;
+        return matchesSearch && matchesStatus;
       }),
-    [search, students]
+    [search, statusFilter, students]
   );
 
   const updateForm = (field: keyof typeof form, value: string) => {
@@ -46,6 +54,7 @@ export default function AdminStudents() {
       studentId: "",
       email: "",
       hostel: "",
+      room: "",
       course: "",
       level: "",
       phone: "",
@@ -60,6 +69,7 @@ export default function AdminStudents() {
       studentId: student.studentId,
       email: student.email,
       hostel: student.hostel,
+      room: student.room ?? "",
       course: student.course,
       level: student.level,
       phone: student.phone ?? "",
@@ -173,6 +183,11 @@ export default function AdminStudents() {
               </label>
 
               <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700">Room</span>
+                <Input placeholder="Room 402" value={form.room} onChange={(event) => updateForm("room", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
                 <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
                   <BookOpen className="w-4 h-4 text-neutral-400" />
                   Course
@@ -241,6 +256,15 @@ export default function AdminStudents() {
               className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full"
             />
           </div>
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="flex h-10 w-full sm:w-44 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            <option value="All">All statuses</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
         </div>
         
         <div className="overflow-x-auto">
@@ -261,7 +285,7 @@ export default function AdminStudents() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">{student.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-mono">{student.studentId}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{student.email}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{student.hostel}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{student.room ? `${student.hostel}, ${student.room}` : student.hostel}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       student.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'

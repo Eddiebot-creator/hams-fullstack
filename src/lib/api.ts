@@ -25,6 +25,7 @@ export type Student = {
   email: string;
   studentId: string;
   hostel: string;
+  room?: string;
   course: string;
   level: string;
   phone: string;
@@ -39,6 +40,7 @@ export type Meal = {
   menu: string;
   status: string;
   consumed?: 0 | 1;
+  scannedAt?: string | null;
 };
 
 export type LaundryBasket = {
@@ -62,6 +64,7 @@ export type CreateStudentPayload = {
   email: string;
   studentId: string;
   hostel: string;
+  room?: string;
   course: string;
   level: string;
   phone?: string;
@@ -209,6 +212,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  updateProfile: (id: number, payload: { name: string; phone?: string; hostel?: string; room?: string }) =>
+    request<Student & { role: Role }>(`/users/${id}/profile`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  changePassword: (id: number, payload: { currentPassword: string; newPassword: string }) =>
+    request<{ message: string }>(`/users/${id}/password`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   meals: () => request<Meal[]>("/meals"),
   createMeal: (payload: CreateMealPayload) =>
     request<Meal>("/meals", {
@@ -250,6 +263,15 @@ export const api = {
     }),
   notifications: (role: Role, studentId?: string) =>
     request<Notification[]>(`/notifications?role=${role}${studentId ? `&studentId=${studentId}` : ""}`),
+  markNotificationRead: (id: number) =>
+    request<{ message: string }>(`/notifications/${id}/read`, {
+      method: "PATCH",
+    }),
+  markNotificationsRead: (payload: { role: Role; studentId?: string }) =>
+    request<{ message: string }>("/notifications/read-all", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
   auditLogs: () => request<AuditLog[]>("/audit-logs"),
   adminAnalytics: () => request<AdminAnalytics>("/admin/analytics"),
   exportUrl: (kind: "students" | "meals" | "baskets" | "audits") => `${API_BASE_URL}/export/${kind}`,

@@ -3,7 +3,7 @@ import {
   Home, QrCode, Shirt, User, 
   ScanLine, UtensilsCrossed, 
   Package, FileText, 
-  Users, BarChart3, LogOut, Bell
+  Users, BarChart3, LogOut, Bell, ShieldCheck
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, type Notification } from "@/src/lib/api";
@@ -18,12 +18,14 @@ const navConfig = {
   kitchen: [
     { name: "Dashboard", path: "/kitchen", icon: Home },
     { name: "Scanner", path: "/kitchen/scanner", icon: ScanLine },
+    { name: "Account", path: "/kitchen/account", icon: User },
   ],
   laundry: [
     { name: "Dashboard", path: "/laundry-staff", icon: Home },
     { name: "Baskets", path: "/laundry-staff/baskets", icon: Package },
     { name: "Reports", path: "/laundry-staff/reports", icon: FileText },
     { name: "Scanner", path: "/laundry-staff/scanner", icon: ScanLine },
+    { name: "Account", path: "/laundry-staff/account", icon: User },
   ],
   admin: [
     { name: "Dashboard", path: "/admin", icon: Home },
@@ -31,6 +33,8 @@ const navConfig = {
     { name: "Students", path: "/admin/students", icon: Users },
     { name: "Staff", path: "/admin/staff", icon: User },
     { name: "Analytics", path: "/admin/analytics", icon: BarChart3 },
+    { name: "Audit", path: "/admin/audit", icon: ShieldCheck },
+    { name: "Account", path: "/admin/account", icon: User },
   ]
 };
 
@@ -39,6 +43,7 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
   const location = useLocation();
   const navItems = navConfig[role];
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const unreadCount = notifications.filter((item) => item.isRead === 0).length;
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("hamsUser") || "{}");
@@ -110,7 +115,7 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
           <div className="flex items-center gap-3">
             <div className="relative text-neutral-500">
               <Bell className="h-5 w-5" />
-              {notifications.length > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-indigo-600" />}
+              {unreadCount > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-indigo-600" />}
             </div>
           <button onClick={signOut} className="text-neutral-500 hover:text-red-600">
             <LogOut className="h-5 w-5" />

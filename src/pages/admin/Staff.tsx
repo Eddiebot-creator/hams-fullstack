@@ -1,12 +1,14 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
-import { Mail, ShieldCheck, UserPlus } from "lucide-react";
+import { Mail, Search, ShieldCheck, UserPlus } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type StaffUser } from "@/src/lib/api";
 
 export default function AdminStaff() {
   const [staff, setStaff] = useState<StaffUser[]>([]);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("All");
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -15,6 +17,15 @@ export default function AdminStaff() {
   useEffect(() => {
     api.staff().then(setStaff).catch(console.error);
   }, []);
+
+  const filteredStaff = useMemo(() => {
+    const query = search.toLowerCase();
+    return staff.filter((member) => {
+      const matchesSearch = member.name.toLowerCase().includes(query) || member.email.toLowerCase().includes(query);
+      const matchesRole = roleFilter === "All" || member.role === roleFilter;
+      return matchesSearch && matchesRole;
+    });
+  }, [roleFilter, search, staff]);
 
   const saveStaff = async (event: FormEvent) => {
     event.preventDefault();
@@ -71,8 +82,23 @@ export default function AdminStaff() {
         </motion.form>
       )}
 
+      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-4 flex flex-col sm:flex-row gap-3">
+        <div className="relative w-full max-w-md">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="h-4 w-4 text-neutral-400" />
+          </div>
+          <Input placeholder="Search staff name or email..." value={search} onChange={(event) => setSearch(event.target.value)} className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full" />
+        </div>
+        <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className="flex h-10 w-full sm:w-44 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+          <option value="All">All roles</option>
+          <option value="kitchen">Kitchen</option>
+          <option value="laundry">Laundry</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {staff.map((member) => (
+        {filteredStaff.map((member) => (
           <div key={member.id} className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-5">
             <div className="flex items-start justify-between">
               <div>

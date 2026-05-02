@@ -76,6 +76,20 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+
+          <div className="mt-6 rounded-xl border border-neutral-100 bg-neutral-50 p-4">
+            <h4 className="text-sm font-semibold text-neutral-900 mb-3">Meal History</h4>
+            <div className="space-y-2">
+              {meals.map((meal) => (
+                <div key={`history-${meal.id}`} className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-600">{meal.type}</span>
+                  <span className={meal.consumed ? "text-green-700 font-medium" : "text-neutral-400"}>
+                    {meal.consumed ? `Collected ${meal.scannedAt || ""}` : "Not collected"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </motion.div>
 
         {/* Laundry Card */}

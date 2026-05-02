@@ -3,6 +3,8 @@ import { motion } from "motion/react";
 import { Shirt, CheckCircle2, AlertCircle } from "lucide-react";
 import { api, type LaundryBasket } from "@/src/lib/api";
 
+const timelineSteps = ["Pending Approval", "Pending", "Washing", "Ready", "Picked Up"];
+
 export default function Laundry() {
   const [records, setRecords] = useState<LaundryBasket[]>([]);
 
@@ -14,6 +16,7 @@ export default function Laundry() {
 
   const current = records[0];
   const pastRecords = records.slice(1);
+  const currentStepIndex = current ? Math.max(0, timelineSteps.indexOf(current.status)) : -1;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
@@ -37,6 +40,21 @@ export default function Laundry() {
               <p className="font-medium text-neutral-900">{current?.receivedAt || "-"}</p>
             </div>
           </div>
+          {current && (
+            <div className="mt-5 grid grid-cols-1 sm:grid-cols-5 gap-3">
+              {timelineSteps.map((step, index) => {
+                const isDone = index <= currentStepIndex;
+                return (
+                  <div key={step} className={`rounded-xl border p-3 ${isDone ? "bg-indigo-50 border-indigo-100 text-indigo-800" : "bg-neutral-50 border-neutral-100 text-neutral-500"}`}>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mb-2 ${isDone ? "bg-indigo-600 text-white" : "bg-white text-neutral-400 border border-neutral-200"}`}>
+                      {index + 1}
+                    </div>
+                    <p className="text-xs font-semibold">{step}</p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="p-6">
