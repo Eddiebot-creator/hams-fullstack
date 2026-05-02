@@ -244,9 +244,7 @@ def init_db():
         if "room" not in user_columns:
             conn.execute("ALTER TABLE users ADD COLUMN room VARCHAR(255)")
 
-        user_count = conn.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
-        if user_count == 0:
-            seed_db(conn)
+        seed_db(conn)
         seed_supporting_tables(conn)
     DB_INIT_ERROR = None
 
@@ -264,51 +262,57 @@ def init_db_safely():
 
 def seed_db(conn):
     demo_password = generate_password_hash("password")
-    users = [
-        ("Samuel Tokunbo", "student@example.com", demo_password, "student", "240011223", "Blue Nile", "Room 402", "Computer Science", "200 Lv", "+234 8097665431", "Active"),
-        ("Kitchen Staff", "kitchen@example.com", demo_password, "kitchen", None, None, None, None, None, None, "Active"),
-        ("Laundry Staff", "laundry@example.com", demo_password, "laundry", None, None, None, None, None, None, "Active"),
-        ("Admin User", "admin@example.com", demo_password, "admin", None, None, None, None, None, None, "Active"),
-        ("Odafe Ojaraida", "20221068@nileuniversity.edu.ng", demo_password, "student", "20221068", "Zambezi", "212", "Mass Communication", "300 Lv", "+234 8010000001", "Active"),
-        ("Raymond Chidi", "241144562@nileuniversity.edu.ng", demo_password, "student", "241144562", "Orange", "105", "Software Engineering", "100 Lv", "+234 8010000002", "Active"),
-        ("Emmanuella Davies", "20234478@nileuniversity.edu.ng", demo_password, "student", "20234478", "Missisipi", "210", "Economics", "200 Lv", "+234 8010000003", "Inactive"),
-        ("Emily Okoro", "211289045@nileuniversity.edu.ng", demo_password, "student", "211289045", "Nile Delta", "304", "Law", "400 Lv", "+234 8010000004", "Active"),
-    ]
+    if table_count(conn, "users") == 0:
+        users = [
+            ("Samuel Tokunbo", "student@example.com", demo_password, "student", "240011223", "Blue Nile", "Room 402", "Computer Science", "200 Lv", "+234 8097665431", "Active"),
+            ("Kitchen Staff", "kitchen@example.com", demo_password, "kitchen", None, None, None, None, None, None, "Active"),
+            ("Laundry Staff", "laundry@example.com", demo_password, "laundry", None, None, None, None, None, None, "Active"),
+            ("Admin User", "admin@example.com", demo_password, "admin", None, None, None, None, None, None, "Active"),
+            ("Odafe Ojaraida", "20221068@nileuniversity.edu.ng", demo_password, "student", "20221068", "Zambezi", "212", "Mass Communication", "300 Lv", "+234 8010000001", "Active"),
+            ("Raymond Chidi", "241144562@nileuniversity.edu.ng", demo_password, "student", "241144562", "Orange", "105", "Software Engineering", "100 Lv", "+234 8010000002", "Active"),
+            ("Emmanuella Davies", "20234478@nileuniversity.edu.ng", demo_password, "student", "20234478", "Missisipi", "210", "Economics", "200 Lv", "+234 8010000003", "Inactive"),
+            ("Emily Okoro", "211289045@nileuniversity.edu.ng", demo_password, "student", "211289045", "Nile Delta", "304", "Law", "400 Lv", "+234 8010000004", "Active"),
+        ]
 
-    conn.executemany(
-        """
-        INSERT INTO users (name, email, password, role, student_id, hostel, room, course, level, phone, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        users,
-    )
+        conn.executemany(
+            """
+            INSERT INTO users (name, email, password, role, student_id, hostel, room, course, level, phone, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            users,
+        )
 
-    conn.executemany(
-        "INSERT INTO meals (type, start_time, end_time, menu, status) VALUES (?, ?, ?, ?, ?)",
-        [
-            ("Breakfast", "07:30 AM", "09:30 AM", "Pancakes, Scrambled Eggs, Coffee", "Completed"),
-            ("Lunch", "12:30 PM", "02:30 PM", "Grilled Chicken Salad, Soup", "Active"),
-            ("Dinner", "07:30 PM", "09:30 PM", "Spaghetti Bolognese, Garlic Bread", "Upcoming"),
-        ],
-    )
+    if table_count(conn, "meals") == 0:
+        conn.executemany(
+            "INSERT INTO meals (type, start_time, end_time, menu, status) VALUES (?, ?, ?, ?, ?)",
+            [
+                ("Breakfast", "07:30 AM", "09:30 AM", "Pancakes, Scrambled Eggs, Coffee", "Completed"),
+                ("Lunch", "12:30 PM", "02:30 PM", "Grilled Chicken Salad, Soup", "Active"),
+                ("Dinner", "07:30 PM", "09:30 PM", "Spaghetti Bolognese, Garlic Bread", "Upcoming"),
+            ],
+        )
 
-    conn.execute(
-        "INSERT INTO meal_scans (student_id, meal_id, scanned_at) VALUES (?, ?, ?)",
-        ("240011223", 1, "2026-05-01 08:05:00"),
-    )
+    if table_count(conn, "meal_scans") == 0:
+        breakfast = conn.execute("SELECT id FROM meals WHERE type = ? ORDER BY id LIMIT 1", ("Breakfast",)).fetchone()
+        if breakfast:
+            conn.execute(
+                "INSERT INTO meal_scans (student_id, meal_id, scanned_at) VALUES (?, ?, ?)",
+                ("240011223", breakfast["id"], "2026-05-01 08:05:00"),
+            )
 
-    conn.executemany(
-        """
-        INSERT INTO laundry_baskets (basket_code, student_id, status, received_at, estimated_finish, notes)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        [
-            ("1042", "240011223", "Washing", "Today, 9:15 AM", "Today, 4:00 PM", "Washing in Progress"),
-            ("1045", "241144562", "Pending", "Today, 9:45 AM", "Today, 5:00 PM", None),
-            ("1021", "20221068", "Ready", "Yesterday, 4:30 PM", "Ready now", None),
-            ("0984", "211289045", "Picked Up", "Yesterday, 2:15 PM", None, None),
-        ],
-    )
+    if table_count(conn, "laundry_baskets") == 0:
+        conn.executemany(
+            """
+            INSERT INTO laundry_baskets (basket_code, student_id, status, received_at, estimated_finish, notes)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+                ("1042", "240011223", "Washing", "Today, 9:15 AM", "Today, 4:00 PM", "Washing in Progress"),
+                ("1045", "241144562", "Pending", "Today, 9:45 AM", "Today, 5:00 PM", None),
+                ("1021", "20221068", "Ready", "Yesterday, 4:30 PM", "Ready now", None),
+                ("0984", "211289045", "Picked Up", "Yesterday, 2:15 PM", None, None),
+            ],
+        )
     conn.commit()
 
 
@@ -319,6 +323,25 @@ def table_count(conn, table_name):
 def table_count_value(table_name):
     with get_connection() as conn:
         return table_count(conn, table_name)
+
+
+def database_counts():
+    tables = [
+        "users",
+        "meals",
+        "meal_scans",
+        "laundry_baskets",
+        "kitchen_scan_logs",
+        "laundry_activity",
+        "laundry_machines",
+        "laundry_reports",
+        "system_alerts",
+        "analytics_meal_trends",
+        "analytics_kpis",
+        "notifications",
+        "audit_logs",
+    ]
+    return {table: table_count_value(table) for table in tables}
 
 
 def log_action(conn, actor, action, entity_type, entity_ref=None):
@@ -490,12 +513,22 @@ def create_app():
     @app.get("/api/database/health")
     def database_health():
         if DB_INIT_ERROR:
+            init_db_safely()
+        if DB_INIT_ERROR:
             return jsonify({"ok": False, "database": "mysql" if IS_MYSQL else "sqlite", "message": DB_INIT_ERROR}), 500
         try:
             count = table_count_value("users")
         except Exception as exc:
             return jsonify({"ok": False, "database": "mysql" if IS_MYSQL else "sqlite", "message": str(exc)}), 500
         return jsonify({"ok": True, "database": "mysql" if IS_MYSQL else "sqlite", "users": count})
+
+    @app.post("/api/database/repair")
+    @app.get("/api/database/repair")
+    def database_repair():
+        init_db_safely()
+        if DB_INIT_ERROR:
+            return jsonify({"ok": False, "database": "mysql" if IS_MYSQL else "sqlite", "message": DB_INIT_ERROR}), 500
+        return jsonify({"ok": True, "database": "mysql" if IS_MYSQL else "sqlite", "summary": database_counts()})
 
     @app.post("/api/auth/login")
     def login():
@@ -1216,22 +1249,7 @@ def create_app():
 
     @app.get("/api/database/summary")
     def database_summary():
-        tables = [
-            "users",
-            "meals",
-            "meal_scans",
-            "laundry_baskets",
-            "kitchen_scan_logs",
-            "laundry_activity",
-            "laundry_machines",
-            "laundry_reports",
-            "system_alerts",
-            "analytics_meal_trends",
-            "analytics_kpis",
-            "notifications",
-            "audit_logs",
-        ]
-        return jsonify({table: table_count_value(table) for table in tables})
+        return jsonify(database_counts())
 
     @app.get("/api/student/<student_id>/overview")
     def student_overview(student_id):
