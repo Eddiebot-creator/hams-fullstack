@@ -1,6 +1,7 @@
 import os
 import queue
 import sqlite3
+import time
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -23,6 +24,21 @@ IS_MYSQL = DATABASE_URL.startswith(("mysql://", "mysql+pymysql://"))
 DB_INTEGRITY_ERROR = (sqlite3.IntegrityError,) + ((pymysql.err.IntegrityError,) if pymysql else ())
 DB_INIT_ERROR = None
 MYSQL_POOL = queue.LifoQueue(maxsize=int(os.environ.get("MYSQL_POOL_SIZE", "5")))
+RESPONSE_CACHE = {}
+
+
+def clear_response_cache():
+    RESPONSE_CACHE.clear()
+
+
+def cached_json(key, ttl, factory):
+    now = time.time()
+    cached = RESPONSE_CACHE.get(key)
+    if cached and cached["expires_at"] > now:
+        return jsonify(cached["value"])
+    value = factory()
+    RESPONSE_CACHE[key] = {"expires_at": now + ttl, "value": value}
+    return jsonify(value)
 
 
 def mysql_config_from_url(database_url):
@@ -531,6 +547,8 @@ def create_app():
 
     @app.after_request
     def add_cors_headers(response):
+        if request.method != "GET":
+            clear_response_cache()
         origin = request.headers.get("Origin", "")
         allowed_origin = os.environ.get("CLIENT_ORIGIN")
         if allowed_origin:
@@ -603,15 +621,17 @@ def create_app():
 
     @app.get("/api/students")
     def students():
-        return jsonify(
-            query_all(
+        return cached_json(
+            "students",
+            30,
+            lambda: query_all(
                 """
                 SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, status
                 FROM users
                 WHERE role = 'student'
                 ORDER BY name
                 """
-            )
+            ),
         )
 
     @app.post("/api/students")
@@ -660,15 +680,18 @@ def create_app():
 
     @app.get("/api/staff")
     def staff():
-        rows = query_all(
-            """
-            SELECT id, name, email, role, status
-            FROM users
-            WHERE role IN ('kitchen', 'laundry', 'admin')
-            ORDER BY role, name
-            """
+        return cached_json(
+            "staff",
+            30,
+            lambda: query_all(
+                """
+                SELECT id, name, email, role, status
+                FROM users
+                WHERE role IN ('kitchen', 'laundry', 'admin')
+                ORDER BY role, name
+                """
+            ),
         )
-        return jsonify(rows)
 
     @app.post("/api/staff")
     def create_staff():
@@ -828,14 +851,16 @@ def create_app():
 
     @app.get("/api/meals")
     def meals():
-        return jsonify(
-            query_all(
+        return cached_json(
+            "meals",
+            30,
+            lambda: query_all(
                 """
                 SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status
                 FROM meals
                 ORDER BY id
                 """
-            )
+            ),
         )
 
     @app.post("/api/meals")
@@ -907,15 +932,17 @@ def create_app():
 
     @app.get("/api/laundry/baskets")
     def laundry_baskets():
-        return jsonify(
-            query_all(
+        return cached_json(
+            "laundry_baskets",
+            20,
+            lambda: query_all(
                 """
                 SELECT id, basket_code AS basketCode, student_id AS studentId, status,
                        received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
                 FROM laundry_baskets
                 ORDER BY id DESC
                 """
-            )
+            ),
         )
 
     @app.patch("/api/laundry/baskets/<int:basket_id>/status")
@@ -1142,6 +1169,32 @@ def create_app():
     def notifications():
         role = request.args.get("role", "")
         student_id = request.args.get("studentId")
+        cache_key = f"notifications:{role}:{student_id or ''}"
+        def load_notifications():
+            if student_id:
+                return query_all(
+                    """
+                    SELECT id, user_role AS userRole, student_id AS studentId, title, message, created_at AS createdAt, is_read AS isRead
+                    FROM notifications
+                    WHERE user_role = ? AND student_id = ?
+                    ORDER BY id DESC
+                    LIMIT 10
+                    """,
+                    (role, student_id),
+                )
+            return query_all(
+                """
+                SELECT id, user_role AS userRole, student_id AS studentId, title, message, created_at AS createdAt, is_read AS isRead
+                FROM notifications
+                WHERE user_role = ?
+                ORDER BY id DESC
+                LIMIT 10
+                """,
+                (role,),
+            )
+
+        return cached_json(cache_key, 8, load_notifications)
+
         if student_id:
             rows = query_all(
                 """
@@ -1193,15 +1246,18 @@ def create_app():
 
     @app.get("/api/audit-logs")
     def audit_logs():
-        rows = query_all(
-            """
-            SELECT id, actor, action, entity_type AS entityType, entity_ref AS entityRef, created_at AS createdAt
-            FROM audit_logs
-            ORDER BY id DESC
-            LIMIT 50
-            """
+        return cached_json(
+            "audit_logs",
+            15,
+            lambda: query_all(
+                """
+                SELECT id, actor, action, entity_type AS entityType, entity_ref AS entityRef, created_at AS createdAt
+                FROM audit_logs
+                ORDER BY id DESC
+                LIMIT 50
+                """
+            ),
         )
-        return jsonify(rows)
 
     @app.get("/api/export/<kind>")
     def export_csv(kind):
@@ -1227,6 +1283,25 @@ def create_app():
 
     @app.get("/api/admin/dashboard")
     def admin_dashboard():
+        def load_admin_dashboard():
+            stats = {
+                "totalStudents": query_one("SELECT COUNT(*) AS count FROM users WHERE role = 'student'")["count"],
+                "mealsServedToday": table_count_value("meal_scans"),
+                "laundryBaskets": table_count_value("laundry_baskets"),
+                "systemUptime": "99.9%",
+            }
+            alerts = query_all(
+                """
+                SELECT id, alert_type AS alertType, message, alert_time AS alertTime
+                FROM system_alerts
+                ORDER BY id DESC
+                LIMIT 5
+                """
+            )
+            return {"stats": stats, "alerts": alerts}
+
+        return cached_json("admin_dashboard", 15, load_admin_dashboard)
+
         stats = {
             "totalStudents": query_one("SELECT COUNT(*) AS count FROM users WHERE role = 'student'")["count"],
             "mealsServedToday": table_count_value("meal_scans"),
@@ -1245,29 +1320,63 @@ def create_app():
 
     @app.get("/api/admin/control-center")
     def admin_control_center():
-        dashboard = admin_dashboard().get_json()
-        pending_baskets = query_all(
-            """
-            SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
-            FROM laundry_baskets
-            WHERE status = 'Pending Approval'
-            ORDER BY id DESC
-            LIMIT 8
-            """
-        )
-        audits = query_all(
-            """
-            SELECT id, actor, action, entity_type AS entityType, entity_ref AS entityRef, created_at AS createdAt
-            FROM audit_logs
-            ORDER BY id DESC
-            LIMIT 6
-            """
-        )
-        return jsonify({"dashboard": dashboard, "pendingBaskets": pending_baskets, "audits": audits})
+        def load_control_center():
+            dashboard = admin_dashboard().get_json()
+            pending_baskets = query_all(
+                """
+                SELECT id, basket_code AS basketCode, student_id AS studentId, status,
+                       received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                FROM laundry_baskets
+                WHERE status = 'Pending Approval'
+                ORDER BY id DESC
+                LIMIT 8
+                """
+            )
+            audits = query_all(
+                """
+                SELECT id, actor, action, entity_type AS entityType, entity_ref AS entityRef, created_at AS createdAt
+                FROM audit_logs
+                ORDER BY id DESC
+                LIMIT 6
+                """
+            )
+            return {"dashboard": dashboard, "pendingBaskets": pending_baskets, "audits": audits}
+
+        return cached_json("admin_control_center", 15, load_control_center)
 
     @app.get("/api/kitchen/dashboard")
     def kitchen_dashboard():
+        def load_kitchen_dashboard():
+            current_meal = query_one(
+                """
+                SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status
+                FROM meals
+                WHERE status = 'Active'
+                ORDER BY id
+                LIMIT 1
+                """
+            )
+            recent_scans = query_all(
+                """
+                SELECT id, student_id AS studentId, meal_type AS mealType, scanned_time AS scannedTime, status
+                FROM kitchen_scan_logs
+                ORDER BY id DESC
+                LIMIT 10
+                """
+            )
+            total_expected = query_one("SELECT COUNT(*) AS count FROM users WHERE role = 'student'")["count"] * 3
+            total_served = query_one("SELECT COUNT(*) AS count FROM meal_scans")["count"] + table_count_value("kitchen_scan_logs")
+            return {
+                "currentMeal": current_meal,
+                "stats": {
+                    "totalExpected": total_expected,
+                    "totalServed": total_served,
+                },
+                "recentScans": recent_scans,
+            }
+
+        return cached_json("kitchen_dashboard", 10, load_kitchen_dashboard)
+
         current_meal = query_one(
             """
             SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status
@@ -1301,6 +1410,25 @@ def create_app():
 
     @app.get("/api/laundry/dashboard")
     def laundry_dashboard():
+        def load_laundry_dashboard():
+            status_counts = {
+                "pending": query_one("SELECT COUNT(*) AS count FROM laundry_baskets WHERE status IN ('Pending', 'Pending Approval')")["count"],
+                "washing": query_one("SELECT COUNT(*) AS count FROM laundry_baskets WHERE status = 'Washing'")["count"],
+                "ready": query_one("SELECT COUNT(*) AS count FROM laundry_baskets WHERE status = 'Ready'")["count"],
+                "issues": query_one("SELECT COUNT(*) AS count FROM laundry_activity WHERE action = 'Issue Reported'")["count"],
+            }
+            activity = query_all(
+                """
+                SELECT id, basket_code AS basketCode, action, staff_name AS staffName, activity_time AS activityTime
+                FROM laundry_activity
+                ORDER BY id DESC
+                LIMIT 10
+                """
+            )
+            return {"statusCounts": status_counts, "activity": activity}
+
+        return cached_json("laundry_dashboard", 10, load_laundry_dashboard)
+
         status_counts = {
             "pending": query_one("SELECT COUNT(*) AS count FROM laundry_baskets WHERE status IN ('Pending', 'Pending Approval')")["count"],
             "washing": query_one("SELECT COUNT(*) AS count FROM laundry_baskets WHERE status = 'Washing'")["count"],
@@ -1319,6 +1447,26 @@ def create_app():
 
     @app.get("/api/laundry/reports")
     def laundry_reports():
+        def load_laundry_reports():
+            reports = query_all(
+                """
+                SELECT id, report_period AS reportPeriod, total_baskets_processed AS totalBasketsProcessed,
+                       average_turnaround AS averageTurnaround, reported_issues AS reportedIssues
+                FROM laundry_reports
+                ORDER BY id
+                """
+            )
+            machines = query_all(
+                """
+                SELECT id, name, machine_type AS machineType, usage_percent AS usagePercent, status
+                FROM laundry_machines
+                ORDER BY id
+                """
+            )
+            return {"reports": reports, "machines": machines}
+
+        return cached_json("laundry_reports", 60, load_laundry_reports)
+
         reports = query_all(
             """
             SELECT id, report_period AS reportPeriod, total_baskets_processed AS totalBasketsProcessed,
@@ -1338,6 +1486,22 @@ def create_app():
 
     @app.get("/api/admin/analytics")
     def admin_analytics():
+        def load_admin_analytics():
+            meal_trends = query_all(
+                """
+                SELECT id, day_label AS dayLabel, attendance_count AS attendanceCount
+                FROM analytics_meal_trends
+                ORDER BY id
+                """
+            )
+            kpis = query_all("SELECT id, name, value, delta FROM analytics_kpis ORDER BY id")
+            machine_average = query_one(
+                "SELECT ROUND(AVG(usage_percent), 0) AS average FROM laundry_machines WHERE status = 'Active'"
+            )["average"]
+            return {"mealTrends": meal_trends, "machineUtilizationAverage": machine_average, "kpis": kpis}
+
+        return cached_json("admin_analytics", 60, load_admin_analytics)
+
         meal_trends = query_all(
             """
             SELECT id, day_label AS dayLabel, attendance_count AS attendanceCount
@@ -1364,10 +1528,58 @@ def create_app():
 
     @app.get("/api/database/summary")
     def database_summary():
-        return jsonify(database_counts())
+        return cached_json("database_summary", 20, database_counts)
 
     @app.get("/api/student/<student_id>/overview")
     def student_overview(student_id):
+        def load_student_overview():
+            student = query_one(
+                """
+                SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, status
+                FROM users
+                WHERE role = 'student' AND student_id = ?
+                """,
+                (student_id,),
+            )
+
+            if student is None:
+                return None
+
+            meals = query_all(
+                """
+                SELECT m.id, m.type, m.start_time AS startTime, m.end_time AS endTime, m.menu, m.status,
+                       CASE WHEN ms.id IS NULL THEN 0 ELSE 1 END AS consumed,
+                       ms.scanned_at AS scannedAt
+                FROM meals m
+                LEFT JOIN meal_scans ms ON ms.meal_id = m.id AND ms.student_id = ?
+                ORDER BY m.id
+                """,
+                (student_id,),
+            )
+
+            laundry = query_all(
+                """
+                SELECT id, basket_code AS basketCode, student_id AS studentId, status,
+                       received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                FROM laundry_baskets
+                WHERE student_id = ?
+                ORDER BY id DESC
+                """,
+                (student_id,),
+            )
+            return {"student": student, "meals": meals, "laundry": laundry}
+
+        overview = RESPONSE_CACHE.get(f"student_overview:{student_id}")
+        if overview and overview["expires_at"] > time.time():
+            if overview["value"] is None:
+                return jsonify({"message": "Student not found."}), 404
+            return jsonify(overview["value"])
+        value = load_student_overview()
+        RESPONSE_CACHE[f"student_overview:{student_id}"] = {"expires_at": time.time() + 10, "value": value}
+        if value is None:
+            return jsonify({"message": "Student not found."}), 404
+        return jsonify(value)
+
         student = query_one(
             """
             SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, status
