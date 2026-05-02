@@ -1,4 +1,5 @@
 import os
+import queue
 import sqlite3
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
@@ -21,6 +22,7 @@ STATIC_DIR = PROJECT_DIR / "dist"
 IS_MYSQL = DATABASE_URL.startswith(("mysql://", "mysql+pymysql://"))
 DB_INTEGRITY_ERROR = (sqlite3.IntegrityError,) + ((pymysql.err.IntegrityError,) if pymysql else ())
 DB_INIT_ERROR = None
+MYSQL_POOL = queue.LifoQueue(maxsize=int(os.environ.get("MYSQL_POOL_SIZE", "5")))
 
 
 def mysql_config_from_url(database_url):
@@ -51,10 +53,16 @@ def mysql_schema(sql):
 
 class DatabaseConnection:
     def __init__(self):
+        self.from_pool = False
         if IS_MYSQL:
             if pymysql is None:
                 raise RuntimeError("PyMySQL is required for MySQL. Run: pip install PyMySQL")
-            self.conn = pymysql.connect(**mysql_config_from_url(DATABASE_URL))
+            try:
+                self.conn = MYSQL_POOL.get_nowait()
+                self.conn.ping(reconnect=True)
+                self.from_pool = True
+            except queue.Empty:
+                self.conn = pymysql.connect(**mysql_config_from_url(DATABASE_URL))
         else:
             DATA_DIR.mkdir(parents=True, exist_ok=True)
             self.conn = sqlite3.connect(DB_PATH)
@@ -67,6 +75,19 @@ class DatabaseConnection:
     def __exit__(self, exc_type, exc, traceback):
         if exc_type:
             self.conn.rollback()
+        self.close(discard=bool(exc_type))
+
+    def close(self, discard=False):
+        if IS_MYSQL:
+            if discard:
+                self.conn.close()
+                return
+            try:
+                self.conn.rollback()
+                MYSQL_POOL.put_nowait(self.conn)
+            except queue.Full:
+                self.conn.close()
+            return
         self.conn.close()
 
     def execute(self, sql, params=()):
@@ -506,7 +527,7 @@ def create_app():
     def close_request_connection(_error=None):
         conn = g.pop("db_conn", None)
         if conn is not None:
-            conn.conn.close()
+            conn.close(discard=bool(_error))
 
     @app.after_request
     def add_cors_headers(response):
@@ -1221,6 +1242,29 @@ def create_app():
             """
         )
         return jsonify({"stats": stats, "alerts": alerts})
+
+    @app.get("/api/admin/control-center")
+    def admin_control_center():
+        dashboard = admin_dashboard().get_json()
+        pending_baskets = query_all(
+            """
+            SELECT id, basket_code AS basketCode, student_id AS studentId, status,
+                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+            FROM laundry_baskets
+            WHERE status = 'Pending Approval'
+            ORDER BY id DESC
+            LIMIT 8
+            """
+        )
+        audits = query_all(
+            """
+            SELECT id, actor, action, entity_type AS entityType, entity_ref AS entityRef, created_at AS createdAt
+            FROM audit_logs
+            ORDER BY id DESC
+            LIMIT 6
+            """
+        )
+        return jsonify({"dashboard": dashboard, "pendingBaskets": pending_baskets, "audits": audits})
 
     @app.get("/api/kitchen/dashboard")
     def kitchen_dashboard():

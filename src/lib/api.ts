@@ -1,6 +1,22 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
+const cache = new Map<string, { expiresAt: number; value: unknown }>();
+const pending = new Map<string, Promise<unknown>>();
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function request<T>(path: string, options?: RequestInit & { cacheMs?: number }): Promise<T> {
+  const method = options?.method ?? "GET";
+  const cacheKey = `${method}:${path}`;
+  const cacheMs = options?.cacheMs ?? 0;
+  if (method !== "GET") {
+    cache.clear();
+    pending.clear();
+  }
+  if (method === "GET" && cacheMs > 0) {
+    const cached = cache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.value as T;
+    const active = pending.get(cacheKey);
+    if (active) return active as Promise<T>;
+  }
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
@@ -14,7 +30,15 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     throw new Error(error.message ?? "Request failed.");
   }
 
-  return response.json() as Promise<T>;
+  const promise = response.json() as Promise<T>;
+  if (method === "GET" && cacheMs > 0) {
+    pending.set(cacheKey, promise);
+    promise.then((value) => {
+      cache.set(cacheKey, { expiresAt: Date.now() + cacheMs, value });
+      pending.delete(cacheKey);
+    }).catch(() => pending.delete(cacheKey));
+  }
+  return promise;
 }
 
 export type Role = "student" | "kitchen" | "laundry" | "admin";
@@ -185,13 +209,19 @@ export type AdminAnalytics = {
   kpis: Array<{ id: number; name: string; value: string; delta: string }>;
 };
 
+export type AdminControlCenter = {
+  dashboard: AdminDashboard;
+  pendingBaskets: LaundryBasket[];
+  audits: AuditLog[];
+};
+
 export const api = {
   login: (payload: { email: string; password: string; role: Role }) =>
     request<{ user: Student & { role: Role } }>("/auth/login", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  students: () => request<Student[]>("/students"),
+  students: () => request<Student[]>("/students", { cacheMs: 15000 }),
   createStudent: (payload: CreateStudentPayload) =>
     request<Student>("/students", {
       method: "POST",
@@ -206,7 +236,7 @@ export const api = {
     request<{ message: string }>(`/students/${id}`, {
       method: "DELETE",
     }),
-  staff: () => request<StaffUser[]>("/staff"),
+  staff: () => request<StaffUser[]>("/staff", { cacheMs: 15000 }),
   createStaff: (payload: { name: string; email: string; role: "kitchen" | "laundry" | "admin"; status?: string; password?: string }) =>
     request<StaffUser>("/staff", {
       method: "POST",
@@ -222,7 +252,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  meals: () => request<Meal[]>("/meals"),
+  meals: () => request<Meal[]>("/meals", { cacheMs: 15000 }),
   createMeal: (payload: CreateMealPayload) =>
     request<Meal>("/meals", {
       method: "POST",
@@ -237,7 +267,7 @@ export const api = {
     request<{ message: string }>(`/meals/${id}`, {
       method: "DELETE",
     }),
-  laundryBaskets: () => request<LaundryBasket[]>("/laundry/baskets"),
+  laundryBaskets: () => request<LaundryBasket[]>("/laundry/baskets", { cacheMs: 10000 }),
   createLaundryBasket: (payload: CreateLaundryBasketPayload) =>
     request<LaundryBasket>("/laundry/baskets", {
       method: "POST",
@@ -257,17 +287,18 @@ export const api = {
     request<{ message: string }>(`/laundry/baskets/${id}`, {
       method: "DELETE",
     }),
-  adminDashboard: () => request<AdminDashboard>("/admin/dashboard"),
-  kitchenDashboard: () => request<KitchenDashboard>("/kitchen/dashboard"),
-  laundryDashboard: () => request<LaundryDashboard>("/laundry/dashboard"),
-  laundryReports: () => request<LaundryReports>("/laundry/reports"),
+  adminDashboard: () => request<AdminDashboard>("/admin/dashboard", { cacheMs: 10000 }),
+  adminControlCenter: () => request<AdminControlCenter>("/admin/control-center", { cacheMs: 10000 }),
+  kitchenDashboard: () => request<KitchenDashboard>("/kitchen/dashboard", { cacheMs: 8000 }),
+  laundryDashboard: () => request<LaundryDashboard>("/laundry/dashboard", { cacheMs: 8000 }),
+  laundryReports: () => request<LaundryReports>("/laundry/reports", { cacheMs: 20000 }),
   requestLaundry: (studentId: string, payload: { basketCode?: string; receivedAt?: string; estimatedFinish?: string; notes?: string }) =>
     request<LaundryBasket>(`/student/${studentId}/laundry-request`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
   notifications: (role: Role, studentId?: string) =>
-    request<Notification[]>(`/notifications?role=${role}${studentId ? `&studentId=${studentId}` : ""}`),
+    request<Notification[]>(`/notifications?role=${role}${studentId ? `&studentId=${studentId}` : ""}`, { cacheMs: 5000 }),
   markNotificationRead: (id: number) =>
     request<{ message: string }>(`/notifications/${id}/read`, {
       method: "PATCH",
@@ -277,10 +308,10 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
-  auditLogs: () => request<AuditLog[]>("/audit-logs"),
-  adminAnalytics: () => request<AdminAnalytics>("/admin/analytics"),
+  auditLogs: () => request<AuditLog[]>("/audit-logs", { cacheMs: 10000 }),
+  adminAnalytics: () => request<AdminAnalytics>("/admin/analytics", { cacheMs: 20000 }),
   exportUrl: (kind: "students" | "meals" | "baskets" | "audits") => `${API_BASE_URL}/export/${kind}`,
-  studentOverview: (studentId: string) => request<StudentOverview>(`/student/${studentId}/overview`),
+  studentOverview: (studentId: string) => request<StudentOverview>(`/student/${studentId}/overview`, { cacheMs: 8000 }),
   scanMeal: (mealId: number, studentId: string) =>
     request<{ message: string; studentId: string; meal: Meal; student: Student }>(`/meals/${mealId}/scan`, {
       method: "POST",

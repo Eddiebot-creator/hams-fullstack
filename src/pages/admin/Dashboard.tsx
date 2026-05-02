@@ -10,9 +10,11 @@ export default function AdminDashboard() {
   const [audits, setAudits] = useState<AuditLog[]>([]);
 
   useEffect(() => {
-    api.adminDashboard().then(setDashboard).catch(console.error);
-    api.laundryBaskets().then(setBaskets).catch(console.error);
-    api.auditLogs().then(setAudits).catch(console.error);
+    api.adminControlCenter().then((data) => {
+      setDashboard(data.dashboard);
+      setBaskets(data.pendingBaskets);
+      setAudits(data.audits);
+    }).catch(console.error);
   }, []);
 
   const stats = [
@@ -21,7 +23,7 @@ export default function AdminDashboard() {
     { title: 'Laundry Baskets', value: dashboard?.stats.laundryBaskets.toLocaleString() ?? '...', icon: Shirt, color: 'text-indigo-600', bg: 'bg-indigo-100' },
     { title: 'System Uptime', value: dashboard?.stats.systemUptime ?? '...', icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-100' },
   ];
-  const pendingApprovals = baskets.filter((basket) => basket.status === "Pending Approval");
+  const pendingApprovals = baskets;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
