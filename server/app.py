@@ -20,6 +20,7 @@ DB_PATH = Path(DATABASE_URL or DATA_DIR / "hams.sqlite")
 STATIC_DIR = PROJECT_DIR / "dist"
 IS_MYSQL = DATABASE_URL.startswith(("mysql://", "mysql+pymysql://"))
 DB_INTEGRITY_ERROR = (sqlite3.IntegrityError,) + ((pymysql.err.IntegrityError,) if pymysql else ())
+DB_INIT_ERROR = None
 
 
 def mysql_config_from_url(database_url):
@@ -120,6 +121,7 @@ def query_all(sql, params=()):
 
 
 def init_db():
+    global DB_INIT_ERROR
     with get_connection() as conn:
         conn.executescript(
             """
@@ -246,6 +248,18 @@ def init_db():
         if user_count == 0:
             seed_db(conn)
         seed_supporting_tables(conn)
+    DB_INIT_ERROR = None
+
+
+def init_db_safely():
+    global DB_INIT_ERROR
+    try:
+        init_db()
+    except Exception as exc:
+        DB_INIT_ERROR = str(exc)
+        print(f"Database initialization failed: {DB_INIT_ERROR}")
+        if not IS_MYSQL:
+            raise
 
 
 def seed_db(conn):
@@ -444,7 +458,7 @@ def seed_supporting_tables(conn):
 
 def create_app():
     app = Flask(__name__, static_folder=None)
-    init_db()
+    init_db_safely()
 
     @app.after_request
     def add_cors_headers(response):
@@ -471,7 +485,17 @@ def create_app():
 
     @app.get("/api/health")
     def health():
-        return jsonify({"ok": True})
+        return jsonify({"ok": True, "database": "mysql" if IS_MYSQL else "sqlite", "databaseReady": DB_INIT_ERROR is None})
+
+    @app.get("/api/database/health")
+    def database_health():
+        if DB_INIT_ERROR:
+            return jsonify({"ok": False, "database": "mysql" if IS_MYSQL else "sqlite", "message": DB_INIT_ERROR}), 500
+        try:
+            count = table_count_value("users")
+        except Exception as exc:
+            return jsonify({"ok": False, "database": "mysql" if IS_MYSQL else "sqlite", "message": str(exc)}), 500
+        return jsonify({"ok": True, "database": "mysql" if IS_MYSQL else "sqlite", "users": count})
 
     @app.post("/api/auth/login")
     def login():
