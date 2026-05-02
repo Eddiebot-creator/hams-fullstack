@@ -116,6 +116,23 @@ export type KitchenDashboard = {
   }>;
 };
 
+export type LaundryReports = {
+  reports: Array<{
+    id: number;
+    reportPeriod: string;
+    totalBasketsProcessed: number;
+    averageTurnaround: string;
+    reportedIssues: number;
+  }>;
+  machines: Array<{
+    id: number;
+    name: string;
+    machineType: string;
+    usagePercent: number;
+    status: string;
+  }>;
+};
+
 export const api = {
   login: (payload: { email: string; password: string; role: Role }) =>
     request<{ user: Student & { role: Role } }>("/auth/login", {
@@ -169,6 +186,7 @@ export const api = {
     }),
   adminDashboard: () => request<AdminDashboard>("/admin/dashboard"),
   kitchenDashboard: () => request<KitchenDashboard>("/kitchen/dashboard"),
+  laundryReports: () => request<LaundryReports>("/laundry/reports"),
   studentOverview: (studentId: string) => request<StudentOverview>(`/student/${studentId}/overview`),
   scanMeal: (mealId: number, studentId: string) =>
     request<{ message: string; studentId: string; meal: Meal }>(`/meals/${mealId}/scan`, {

@@ -1,8 +1,13 @@
+import { useMemo } from "react";
 import { motion } from "motion/react";
 import { QrCode, RefreshCw } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 
 export default function QRCode() {
+  const storedUser = useMemo(() => JSON.parse(localStorage.getItem("hamsUser") || "{}"), []);
+  const studentId = storedUser.studentId || "240011223";
+  const qrData = encodeURIComponent(`HAMS-STUDENT:${studentId}`);
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-lg mx-auto space-y-6 flex flex-col items-center justify-center min-h-[80vh]">
       <motion.div
@@ -16,9 +21,8 @@ export default function QRCode() {
         <p className="text-neutral-500 mb-8">Scan this code at the kitchen or laundry</p>
         
         <div className="bg-white p-4 rounded-2xl border-2 border-neutral-100 shadow-sm inline-block mb-8 relative">
-          {/* Simulated QR Code using a placeholder image */}
           <img 
-            src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=student-12345" 
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${qrData}`}
             alt="Student QR Code" 
             className="w-64 h-64 rounded-xl"
           />
@@ -34,7 +38,7 @@ export default function QRCode() {
         <div className="space-y-4">
           <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100">
             <p className="text-sm font-medium text-neutral-500 uppercase tracking-wider mb-1">Student ID</p>
-            <p className="text-xl font-bold text-neutral-900 font-mono tracking-widest">240011223</p>
+            <p className="text-xl font-bold text-neutral-900 font-mono tracking-widest">{studentId}</p>
           </div>
           
           <Button variant="outline" className="w-full flex items-center justify-center">

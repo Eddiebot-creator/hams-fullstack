@@ -1,17 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { ScanLine, CheckCircle2, XCircle } from "lucide-react";
+import { IdCard, ScanLine, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
-import { api } from "@/src/lib/api";
+import { Input } from "@/src/components/ui/input";
+import { api, type Meal } from "@/src/lib/api";
 
 export default function KitchenScanner() {
   const [scanStatus, setScanStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [scanMessage, setScanMessage] = useState("Waiting for scan...");
-  const [studentId] = useState("240011223");
+  const [studentId, setStudentId] = useState("240011223");
+  const [meals, setMeals] = useState<Meal[]>([]);
+  const [mealId, setMealId] = useState(2);
 
-  const simulateScan = async (mealId: number) => {
+  useEffect(() => {
+    api.meals().then((items) => {
+      setMeals(items);
+      const activeMeal = items.find((meal) => meal.status === "Active") ?? items[0];
+      if (activeMeal) setMealId(activeMeal.id);
+    }).catch(console.error);
+  }, []);
+
+  const simulateScan = async () => {
+    if (!studentId.trim()) {
+      setScanMessage("Enter a student ID before scanning.");
+      setScanStatus("error");
+      return;
+    }
+
     try {
-      const result = await api.scanMeal(mealId, studentId);
+      const result = await api.scanMeal(mealId, studentId.trim());
       setScanMessage(`${result.meal.type} approved for Student ID: ${result.studentId}`);
       setScanStatus("success");
     } catch (err) {
@@ -49,13 +66,32 @@ export default function KitchenScanner() {
 
         {scanStatus === 'idle' && (
           <div className="space-y-4">
-            <p className="text-sm font-medium text-neutral-500">Waiting for scan...</p>
-            <div className="flex justify-center space-x-4">
-              <Button variant="outline" onClick={() => simulateScan(2)} className="border-green-200 text-green-700 hover:bg-green-50">
-                Success
-              </Button>
-              <Button variant="outline" onClick={() => simulateScan(1)} className="border-red-200 text-red-700 hover:bg-red-50">
-                Denied
+            <div className="grid grid-cols-1 gap-3 text-left">
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <IdCard className="w-4 h-4 text-neutral-400" />
+                  Student ID from QR
+                </span>
+                <Input value={studentId} onChange={(event) => setStudentId(event.target.value)} placeholder="240011223" />
+              </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700">Meal to scan</span>
+                <select
+                  value={mealId}
+                  onChange={(event) => setMealId(Number(event.target.value))}
+                  className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                >
+                  {meals.map((meal) => (
+                    <option key={meal.id} value={meal.id}>
+                      {meal.type} ({meal.status})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="flex justify-center">
+              <Button onClick={simulateScan} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                Verify Student Meal
               </Button>
             </div>
           </div>

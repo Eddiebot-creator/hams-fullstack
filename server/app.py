@@ -3,6 +3,7 @@ import sqlite3
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
+from werkzeug.security import check_password_hash, generate_password_hash
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -138,15 +139,16 @@ def init_db():
 
 
 def seed_db(conn):
+    demo_password = generate_password_hash("password")
     users = [
-        ("Samuel Tokunbo", "student@example.com", "password", "student", "240011223", "Blue Nile, Room 402", "Computer Science", "200 Lv", "+234 8097665431", "Active"),
-        ("Kitchen Staff", "kitchen@example.com", "password", "kitchen", None, None, None, None, None, "Active"),
-        ("Laundry Staff", "laundry@example.com", "password", "laundry", None, None, None, None, None, "Active"),
-        ("Admin User", "admin@example.com", "password", "admin", None, None, None, None, None, "Active"),
-        ("Odafe Ojaraida", "20221068@nileuniversity.edu.ng", "password", "student", "20221068", "Zambezi 212", "Mass Communication", "300 Lv", "+234 8010000001", "Active"),
-        ("Raymond Chidi", "241144562@nileuniversity.edu.ng", "password", "student", "241144562", "Orange 105", "Software Engineering", "100 Lv", "+234 8010000002", "Active"),
-        ("Emmanuella Davies", "20234478@nileuniversity.edu.ng", "password", "student", "20234478", "Missisipi 210", "Economics", "200 Lv", "+234 8010000003", "Inactive"),
-        ("Emily Okoro", "211289045@nileuniversity.edu.ng", "password", "student", "211289045", "Nile Delta 304", "Law", "400 Lv", "+234 8010000004", "Active"),
+        ("Samuel Tokunbo", "student@example.com", demo_password, "student", "240011223", "Blue Nile, Room 402", "Computer Science", "200 Lv", "+234 8097665431", "Active"),
+        ("Kitchen Staff", "kitchen@example.com", demo_password, "kitchen", None, None, None, None, None, "Active"),
+        ("Laundry Staff", "laundry@example.com", demo_password, "laundry", None, None, None, None, None, "Active"),
+        ("Admin User", "admin@example.com", demo_password, "admin", None, None, None, None, None, "Active"),
+        ("Odafe Ojaraida", "20221068@nileuniversity.edu.ng", demo_password, "student", "20221068", "Zambezi 212", "Mass Communication", "300 Lv", "+234 8010000001", "Active"),
+        ("Raymond Chidi", "241144562@nileuniversity.edu.ng", demo_password, "student", "241144562", "Orange 105", "Software Engineering", "100 Lv", "+234 8010000002", "Active"),
+        ("Emmanuella Davies", "20234478@nileuniversity.edu.ng", demo_password, "student", "20234478", "Missisipi 210", "Economics", "200 Lv", "+234 8010000003", "Inactive"),
+        ("Emily Okoro", "211289045@nileuniversity.edu.ng", demo_password, "student", "211289045", "Nile Delta 304", "Law", "400 Lv", "+234 8010000004", "Active"),
     ]
 
     conn.executemany(
@@ -343,16 +345,17 @@ def create_app():
 
         user = query_one(
             """
-            SELECT id, name, email, role, student_id AS studentId, hostel, course, level, phone, status
+            SELECT id, name, email, password, role, student_id AS studentId, hostel, course, level, phone, status
             FROM users
-            WHERE email = ? AND password = ? AND role = ?
+            WHERE email = ? AND role = ?
             """,
-            (email, password, role),
+            (email, role),
         )
 
-        if user is None:
+        if user is None or not (user["password"] == password or check_password_hash(user["password"], password)):
             return jsonify({"message": "Invalid login details."}), 401
 
+        user.pop("password", None)
         return jsonify({"user": user})
 
     @app.get("/api/students")
@@ -387,7 +390,7 @@ def create_app():
                     (
                         payload["name"],
                         payload["email"],
-                        payload.get("password", "password"),
+                        generate_password_hash(payload.get("password", "password")),
                         payload["studentId"],
                         payload["hostel"],
                         payload["course"],
