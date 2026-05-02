@@ -109,7 +109,7 @@ export default function Login() {
                     key={option.role}
                     type="button"
                     onClick={() => setRole(option.role)}
-                    className={`text-left rounded-xl border p-4 transition-colors ${
+                    className={`text-left rounded-2xl border p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
                       isSelected
                         ? "border-indigo-500 bg-indigo-50 text-indigo-900"
                         : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { Users, UtensilsCrossed, Shirt, TrendingUp } from "lucide-react";
 import { api, type AdminDashboard as AdminDashboardData } from "@/src/lib/api";
@@ -76,26 +77,26 @@ export default function AdminDashboard() {
         >
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-2 gap-4">
-            <button className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 hover:bg-indigo-50 hover:border-indigo-200 transition-colors text-left">
+            <Link to="/admin/students" className="group p-4 rounded-2xl bg-neutral-50 border border-neutral-200 hover:bg-indigo-50 hover:border-indigo-200 hover:shadow-md transition-all text-left active:translate-y-px">
               <Users className="w-6 h-6 text-indigo-600 mb-2" />
               <p className="font-medium text-neutral-900">Add Student</p>
               <p className="text-xs text-neutral-500 mt-1">Register a new student</p>
-            </button>
-            <button className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 hover:bg-indigo-50 hover:border-indigo-200 transition-colors text-left">
+            </Link>
+            <Link to="/admin/meals" className="group p-4 rounded-2xl bg-neutral-50 border border-neutral-200 hover:bg-green-50 hover:border-green-200 hover:shadow-md transition-all text-left active:translate-y-px">
               <UtensilsCrossed className="w-6 h-6 text-indigo-600 mb-2" />
               <p className="font-medium text-neutral-900">Update Menu</p>
               <p className="text-xs text-neutral-500 mt-1">Change today's meals</p>
-            </button>
-            <button className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 hover:bg-indigo-50 hover:border-indigo-200 transition-colors text-left">
+            </Link>
+            <Link to="/admin/analytics" className="group p-4 rounded-2xl bg-neutral-50 border border-neutral-200 hover:bg-blue-50 hover:border-blue-200 hover:shadow-md transition-all text-left active:translate-y-px">
               <Shirt className="w-6 h-6 text-indigo-600 mb-2" />
               <p className="font-medium text-neutral-900">Laundry Schedule</p>
               <p className="text-xs text-neutral-500 mt-1">Manage drop-off times</p>
-            </button>
-            <button className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 hover:bg-indigo-50 hover:border-indigo-200 transition-colors text-left">
+            </Link>
+            <Link to="/admin/audit" className="group p-4 rounded-2xl bg-neutral-50 border border-neutral-200 hover:bg-purple-50 hover:border-purple-200 hover:shadow-md transition-all text-left active:translate-y-px">
               <TrendingUp className="w-6 h-6 text-indigo-600 mb-2" />
               <p className="font-medium text-neutral-900">Generate Report</p>
               <p className="text-xs text-neutral-500 mt-1">Export system data</p>
-            </button>
+            </Link>
           </div>
         </motion.div>
       </div>
