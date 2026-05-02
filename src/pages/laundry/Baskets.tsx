@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
-import { Search, Filter, MoreHorizontal } from "lucide-react";
+import { PackagePlus, Search, Filter, MoreHorizontal } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type LaundryBasket } from "@/src/lib/api";
@@ -8,6 +8,18 @@ import { api, type LaundryBasket } from "@/src/lib/api";
 export default function LaundryBaskets() {
   const [baskets, setBaskets] = useState<LaundryBasket[]>([]);
   const [search, setSearch] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    basketCode: "",
+    studentId: "",
+    status: "Pending",
+    receivedAt: "",
+    estimatedFinish: "",
+    notes: "",
+    staffName: "",
+  });
 
   useEffect(() => {
     api.laundryBaskets().then(setBaskets).catch(console.error);
@@ -22,12 +34,85 @@ export default function LaundryBaskets() {
     [baskets, search]
   );
 
+  const updateForm = (field: keyof typeof form, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const resetForm = () => {
+    setForm({
+      basketCode: "",
+      studentId: "",
+      status: "Pending",
+      receivedAt: "",
+      estimatedFinish: "",
+      notes: "",
+      staffName: "",
+    });
+  };
+
+  const handleAddBasket = async (event: FormEvent) => {
+    event.preventDefault();
+    setIsSaving(true);
+    setError("");
+
+    try {
+      const basket = await api.createLaundryBasket(form);
+      setBaskets((current) => [basket, ...current]);
+      resetForm();
+      setIsAdding(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to add basket.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-neutral-900">Manage Baskets</h1>
-        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">Add Basket</Button>
+        <Button onClick={() => setIsAdding((value) => !value)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+          <PackagePlus className="w-4 h-4 mr-2" />
+          Add Basket
+        </Button>
       </div>
+
+      {isAdding && (
+        <motion.form
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          onSubmit={handleAddBasket}
+          className="bg-white rounded-2xl shadow-sm border border-neutral-100 p-6 space-y-4"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Input required placeholder="Basket ID e.g. 1050" value={form.basketCode} onChange={(event) => updateForm("basketCode", event.target.value)} />
+            <Input required placeholder="Student ID" value={form.studentId} onChange={(event) => updateForm("studentId", event.target.value)} />
+            <select
+              value={form.status}
+              onChange={(event) => updateForm("status", event.target.value)}
+              className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              <option value="Pending">Pending</option>
+              <option value="Washing">Washing</option>
+              <option value="Ready">Ready</option>
+              <option value="Picked Up">Picked Up</option>
+            </select>
+            <Input required placeholder="Received e.g. Today, 11:30 AM" value={form.receivedAt} onChange={(event) => updateForm("receivedAt", event.target.value)} />
+            <Input placeholder="Estimated finish" value={form.estimatedFinish} onChange={(event) => updateForm("estimatedFinish", event.target.value)} />
+            <Input placeholder="Notes" value={form.notes} onChange={(event) => updateForm("notes", event.target.value)} />
+            <Input placeholder="Staff name" value={form.staffName} onChange={(event) => updateForm("staffName", event.target.value)} />
+          </div>
+          {error && <p className="text-sm font-medium text-red-600">{error}</p>}
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="outline" onClick={() => { setIsAdding(false); setError(""); resetForm(); }}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+              {isSaving ? "Saving..." : "Save Basket"}
+            </Button>
+          </div>
+        </motion.form>
+      )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden">
         <div className="p-6 border-b border-neutral-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

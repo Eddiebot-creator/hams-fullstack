@@ -57,6 +57,27 @@ export type StudentOverview = {
   laundry: LaundryBasket[];
 };
 
+export type CreateStudentPayload = {
+  name: string;
+  email: string;
+  studentId: string;
+  hostel: string;
+  course: string;
+  level: string;
+  phone?: string;
+  status?: string;
+};
+
+export type CreateLaundryBasketPayload = {
+  basketCode: string;
+  studentId: string;
+  status: string;
+  receivedAt: string;
+  estimatedFinish?: string;
+  notes?: string;
+  staffName?: string;
+};
+
 export const api = {
   login: (payload: { email: string; password: string; role: Role }) =>
     request<{ user: Student & { role: Role } }>("/auth/login", {
@@ -64,8 +85,18 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   students: () => request<Student[]>("/students"),
+  createStudent: (payload: CreateStudentPayload) =>
+    request<Student>("/students", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   meals: () => request<Meal[]>("/meals"),
   laundryBaskets: () => request<LaundryBasket[]>("/laundry/baskets"),
+  createLaundryBasket: (payload: CreateLaundryBasketPayload) =>
+    request<LaundryBasket>("/laundry/baskets", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   studentOverview: (studentId: string) => request<StudentOverview>(`/student/${studentId}/overview`),
   scanMeal: (mealId: number, studentId: string) =>
     request<{ message: string; studentId: string; meal: Meal }>(`/meals/${mealId}/scan`, {

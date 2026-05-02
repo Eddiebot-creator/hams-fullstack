@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
 import { Search, UserPlus, MoreVertical } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
@@ -8,6 +8,19 @@ import { api, type Student } from "@/src/lib/api";
 export default function AdminStudents() {
   const [students, setStudents] = useState<Student[]>([]);
   const [search, setSearch] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    name: "",
+    studentId: "",
+    email: "",
+    hostel: "",
+    course: "",
+    level: "",
+    phone: "",
+    status: "Active",
+  });
 
   useEffect(() => {
     api.students().then(setStudents).catch(console.error);
@@ -22,15 +35,85 @@ export default function AdminStudents() {
     [search, students]
   );
 
+  const updateForm = (field: keyof typeof form, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const resetForm = () => {
+    setForm({
+      name: "",
+      studentId: "",
+      email: "",
+      hostel: "",
+      course: "",
+      level: "",
+      phone: "",
+      status: "Active",
+    });
+  };
+
+  const handleAddStudent = async (event: FormEvent) => {
+    event.preventDefault();
+    setIsSaving(true);
+    setError("");
+
+    try {
+      const student = await api.createStudent(form);
+      setStudents((current) => [...current, student].sort((a, b) => a.name.localeCompare(b.name)));
+      resetForm();
+      setIsAdding(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to add student.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-neutral-900">Manage Students</h1>
-        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">
+        <Button onClick={() => setIsAdding((value) => !value)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
           <UserPlus className="w-4 h-4 mr-2" />
           Add Student
         </Button>
       </div>
+
+      {isAdding && (
+        <motion.form
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          onSubmit={handleAddStudent}
+          className="bg-white rounded-2xl shadow-sm border border-neutral-100 p-6 space-y-4"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Input required placeholder="Full name" value={form.name} onChange={(event) => updateForm("name", event.target.value)} />
+            <Input required placeholder="Student ID" value={form.studentId} onChange={(event) => updateForm("studentId", event.target.value)} />
+            <Input required type="email" placeholder="Email" value={form.email} onChange={(event) => updateForm("email", event.target.value)} />
+            <Input required placeholder="Hostel / Room" value={form.hostel} onChange={(event) => updateForm("hostel", event.target.value)} />
+            <Input required placeholder="Course" value={form.course} onChange={(event) => updateForm("course", event.target.value)} />
+            <Input required placeholder="Level" value={form.level} onChange={(event) => updateForm("level", event.target.value)} />
+            <Input placeholder="Phone" value={form.phone} onChange={(event) => updateForm("phone", event.target.value)} />
+            <select
+              value={form.status}
+              onChange={(event) => updateForm("status", event.target.value)}
+              className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+          {error && <p className="text-sm font-medium text-red-600">{error}</p>}
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="outline" onClick={() => { setIsAdding(false); setError(""); resetForm(); }}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+              {isSaving ? "Saving..." : "Save Student"}
+            </Button>
+          </div>
+        </motion.form>
+      )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden">
         <div className="p-6 border-b border-neutral-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

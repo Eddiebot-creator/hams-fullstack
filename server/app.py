@@ -368,6 +368,49 @@ def create_app():
             )
         )
 
+    @app.post("/api/students")
+    def create_student():
+        payload = request.get_json(silent=True) or {}
+        required_fields = ["name", "email", "studentId", "hostel", "course", "level"]
+        missing_fields = [field for field in required_fields if not payload.get(field)]
+
+        if missing_fields:
+            return jsonify({"message": f"Missing required fields: {', '.join(missing_fields)}."}), 400
+
+        try:
+            with get_connection() as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO users (name, email, password, role, student_id, hostel, course, level, phone, status)
+                    VALUES (?, ?, ?, 'student', ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        payload["name"],
+                        payload["email"],
+                        payload.get("password", "password"),
+                        payload["studentId"],
+                        payload["hostel"],
+                        payload["course"],
+                        payload["level"],
+                        payload.get("phone", ""),
+                        payload.get("status", "Active"),
+                    ),
+                )
+                conn.commit()
+                student_id = cursor.lastrowid
+        except sqlite3.IntegrityError:
+            return jsonify({"message": "A student with that email or student ID already exists."}), 409
+
+        student = query_one(
+            """
+            SELECT id, name, email, student_id AS studentId, hostel, course, level, phone, status
+            FROM users
+            WHERE id = ?
+            """,
+            (student_id,),
+        )
+        return jsonify(student), 201
+
     @app.get("/api/meals")
     def meals():
         return jsonify(
@@ -392,6 +435,59 @@ def create_app():
                 """
             )
         )
+
+    @app.post("/api/laundry/baskets")
+    def create_laundry_basket():
+        payload = request.get_json(silent=True) or {}
+        required_fields = ["basketCode", "studentId", "status", "receivedAt"]
+        missing_fields = [field for field in required_fields if not payload.get(field)]
+
+        if missing_fields:
+            return jsonify({"message": f"Missing required fields: {', '.join(missing_fields)}."}), 400
+
+        try:
+            with get_connection() as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO laundry_baskets (basket_code, student_id, status, received_at, estimated_finish, notes)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        payload["basketCode"],
+                        payload["studentId"],
+                        payload["status"],
+                        payload["receivedAt"],
+                        payload.get("estimatedFinish"),
+                        payload.get("notes"),
+                    ),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO laundry_activity (basket_code, action, staff_name, activity_time)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        payload["basketCode"],
+                        "Received",
+                        payload.get("staffName", "Laundry Staff"),
+                        payload["receivedAt"],
+                    ),
+                )
+                conn.commit()
+                basket_id = cursor.lastrowid
+        except sqlite3.IntegrityError:
+            return jsonify({"message": "A basket with that basket ID already exists."}), 409
+
+        basket = query_one(
+            """
+            SELECT id, basket_code AS basketCode, student_id AS studentId, status,
+                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+            FROM laundry_baskets
+            WHERE id = ?
+            """,
+            (basket_id,),
+        )
+        return jsonify(basket), 201
 
     @app.get("/api/kitchen/dashboard")
     def kitchen_dashboard():
