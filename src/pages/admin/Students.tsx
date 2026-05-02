@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
-import { Search, UserPlus, MoreVertical } from "lucide-react";
+import { BookOpen, Building2, IdCard, Mail, Phone, Search, User, UserPlus, MoreVertical } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type Student } from "@/src/lib/api";
@@ -84,33 +84,105 @@ export default function AdminStudents() {
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           onSubmit={handleAddStudent}
-          className="bg-white rounded-2xl shadow-sm border border-neutral-100 p-6 space-y-4"
+          className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden"
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Input required placeholder="Full name" value={form.name} onChange={(event) => updateForm("name", event.target.value)} />
-            <Input required placeholder="Student ID" value={form.studentId} onChange={(event) => updateForm("studentId", event.target.value)} />
-            <Input required type="email" placeholder="Email" value={form.email} onChange={(event) => updateForm("email", event.target.value)} />
-            <Input required placeholder="Hostel / Room" value={form.hostel} onChange={(event) => updateForm("hostel", event.target.value)} />
-            <Input required placeholder="Course" value={form.course} onChange={(event) => updateForm("course", event.target.value)} />
-            <Input required placeholder="Level" value={form.level} onChange={(event) => updateForm("level", event.target.value)} />
-            <Input placeholder="Phone" value={form.phone} onChange={(event) => updateForm("phone", event.target.value)} />
-            <select
-              value={form.status}
-              onChange={(event) => updateForm("status", event.target.value)}
-              className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-            >
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
+          <div className="border-b border-neutral-100 bg-neutral-50 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center">
+                <UserPlus className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-neutral-900">New student profile</h2>
+                <p className="text-sm text-neutral-500">Fill the key details used for login, hostel records, meals, and laundry.</p>
+              </div>
+            </div>
           </div>
-          {error && <p className="text-sm font-medium text-red-600">{error}</p>}
-          <div className="flex justify-end gap-3">
+
+          <div className="p-6 space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <User className="w-4 h-4 text-neutral-400" />
+                  Full name
+                </span>
+                <Input required placeholder="Samuel Tokunbo" value={form.name} onChange={(event) => updateForm("name", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <IdCard className="w-4 h-4 text-neutral-400" />
+                  Student ID
+                </span>
+                <Input required placeholder="240011223" value={form.studentId} onChange={(event) => updateForm("studentId", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-neutral-400" />
+                  Email address
+                </span>
+                <Input required type="email" placeholder="student@nileuniversity.edu.ng" value={form.email} onChange={(event) => updateForm("email", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-neutral-400" />
+                  Hostel and room
+                </span>
+                <Input required placeholder="Blue Nile, Room 402" value={form.hostel} onChange={(event) => updateForm("hostel", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-neutral-400" />
+                  Course
+                </span>
+                <Input required placeholder="Computer Science" value={form.course} onChange={(event) => updateForm("course", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700">Level</span>
+                <Input required placeholder="200 Lv" value={form.level} onChange={(event) => updateForm("level", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-neutral-400" />
+                  Phone
+                </span>
+                <Input placeholder="+234 809 000 0000" value={form.phone} onChange={(event) => updateForm("phone", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700">Account status</span>
+                <select
+                  value={form.status}
+                  onChange={(event) => updateForm("status", event.target.value)}
+                  className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </label>
+            </div>
+
+            {error && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                {error}
+              </div>
+            )}
+          </div>
+
+          <div className="px-6 py-4 border-t border-neutral-100 bg-neutral-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-xs text-neutral-500">Default password for new students is password.</p>
+            <div className="flex justify-end gap-3">
             <Button type="button" variant="outline" onClick={() => { setIsAdding(false); setError(""); resetForm(); }}>
               Cancel
             </Button>
             <Button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 text-white">
               {isSaving ? "Saving..." : "Save Student"}
             </Button>
+            </div>
           </div>
         </motion.form>
       )}
