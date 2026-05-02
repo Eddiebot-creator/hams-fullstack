@@ -1,24 +1,105 @@
 import os
 import sqlite3
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from flask import Flask, Response, jsonify, request, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
+
+try:
+    import pymysql
+except ImportError:
+    pymysql = None
 
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = BASE_DIR.parent
 DATA_DIR = BASE_DIR / "data"
-DB_PATH = Path(os.environ.get("DATABASE_URL", DATA_DIR / "hams.sqlite"))
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+DB_PATH = Path(DATABASE_URL or DATA_DIR / "hams.sqlite")
 STATIC_DIR = PROJECT_DIR / "dist"
+IS_MYSQL = DATABASE_URL.startswith(("mysql://", "mysql+pymysql://"))
+DB_INTEGRITY_ERROR = (sqlite3.IntegrityError,) + ((pymysql.err.IntegrityError,) if pymysql else ())
+
+
+def mysql_config_from_url(database_url):
+    parsed = urlparse(database_url.replace("mysql+pymysql://", "mysql://", 1))
+    return {
+        "host": parsed.hostname,
+        "port": parsed.port or 3306,
+        "user": unquote(parsed.username or ""),
+        "password": unquote(parsed.password or ""),
+        "database": parsed.path.lstrip("/"),
+        "charset": "utf8mb4",
+        "cursorclass": pymysql.cursors.DictCursor,
+        "autocommit": False,
+    }
+
+
+def mysql_schema(sql):
+    return (
+        sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "INT AUTO_INCREMENT PRIMARY KEY")
+        .replace("DEFAULT CURRENT_TIMESTAMP", "DEFAULT CURRENT_TIMESTAMP")
+    )
+
+
+class DatabaseConnection:
+    def __init__(self):
+        if IS_MYSQL:
+            if pymysql is None:
+                raise RuntimeError("PyMySQL is required for MySQL. Run: pip install PyMySQL")
+            self.conn = pymysql.connect(**mysql_config_from_url(DATABASE_URL))
+        else:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            self.conn = sqlite3.connect(DB_PATH)
+            self.conn.row_factory = sqlite3.Row
+            self.conn.execute("PRAGMA foreign_keys = ON")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        if exc_type:
+            self.conn.rollback()
+        self.conn.close()
+
+    def execute(self, sql, params=()):
+        if IS_MYSQL:
+            cursor = self.conn.cursor()
+            cursor.execute(mysql_schema(sql).replace("?", "%s"), params)
+            return cursor
+        return self.conn.execute(sql, params)
+
+    def executemany(self, sql, params):
+        if IS_MYSQL:
+            cursor = self.conn.cursor()
+            cursor.executemany(mysql_schema(sql).replace("?", "%s"), params)
+            return cursor
+        return self.conn.executemany(sql, params)
+
+    def executescript(self, script):
+        if IS_MYSQL:
+            cursor = self.conn.cursor()
+            for statement in script.split(";"):
+                statement = statement.strip()
+                if statement:
+                    cursor.execute(mysql_schema(statement))
+            return cursor
+        return self.conn.executescript(script)
+
+    def commit(self):
+        self.conn.commit()
 
 
 def get_connection():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    return DatabaseConnection()
+
+
+def table_columns(conn, table_name):
+    if IS_MYSQL:
+        rows = conn.execute(f"SHOW COLUMNS FROM {table_name}").fetchall()
+        return [row["Field"] for row in rows]
+    return [row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()]
 
 
 def query_one(sql, params=()):
@@ -39,122 +120,122 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS users (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              name TEXT NOT NULL,
-              email TEXT NOT NULL UNIQUE,
-              password TEXT NOT NULL,
-              role TEXT NOT NULL CHECK (role IN ('student', 'kitchen', 'laundry', 'admin')),
-              student_id TEXT UNIQUE,
-              hostel TEXT,
-              room TEXT,
-              course TEXT,
-              level TEXT,
-              phone TEXT,
-              status TEXT NOT NULL DEFAULT 'Active'
+              name VARCHAR(255) NOT NULL,
+              email VARCHAR(255) NOT NULL UNIQUE,
+              password VARCHAR(255) NOT NULL,
+              role VARCHAR(50) NOT NULL CHECK (role IN ('student', 'kitchen', 'laundry', 'admin')),
+              student_id VARCHAR(255) UNIQUE,
+              hostel VARCHAR(255),
+              room VARCHAR(255),
+              course VARCHAR(255),
+              level VARCHAR(255),
+              phone VARCHAR(255),
+              status VARCHAR(50) NOT NULL DEFAULT 'Active'
             );
 
             CREATE TABLE IF NOT EXISTS meals (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              type TEXT NOT NULL,
-              start_time TEXT NOT NULL,
-              end_time TEXT NOT NULL,
+              type VARCHAR(255) NOT NULL,
+              start_time VARCHAR(255) NOT NULL,
+              end_time VARCHAR(255) NOT NULL,
               menu TEXT NOT NULL,
-              status TEXT NOT NULL DEFAULT 'Upcoming'
+              status VARCHAR(50) NOT NULL DEFAULT 'Upcoming'
             );
 
             CREATE TABLE IF NOT EXISTS meal_scans (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              student_id TEXT NOT NULL,
+              student_id VARCHAR(255) NOT NULL,
               meal_id INTEGER NOT NULL,
-              scanned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              scanned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
               FOREIGN KEY (meal_id) REFERENCES meals(id)
             );
 
             CREATE TABLE IF NOT EXISTS laundry_baskets (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              basket_code TEXT NOT NULL UNIQUE,
-              student_id TEXT NOT NULL,
-              status TEXT NOT NULL,
-              received_at TEXT NOT NULL,
-              estimated_finish TEXT,
+              basket_code VARCHAR(255) NOT NULL UNIQUE,
+              student_id VARCHAR(255) NOT NULL,
+              status VARCHAR(50) NOT NULL,
+              received_at VARCHAR(255) NOT NULL,
+              estimated_finish VARCHAR(255),
               notes TEXT
             );
 
             CREATE TABLE IF NOT EXISTS kitchen_scan_logs (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              student_id TEXT NOT NULL,
-              meal_type TEXT NOT NULL,
-              scanned_time TEXT NOT NULL,
-              status TEXT NOT NULL
+              student_id VARCHAR(255) NOT NULL,
+              meal_type VARCHAR(255) NOT NULL,
+              scanned_time VARCHAR(255) NOT NULL,
+              status VARCHAR(255) NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS laundry_activity (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              basket_code TEXT NOT NULL,
-              action TEXT NOT NULL,
-              staff_name TEXT NOT NULL,
-              activity_time TEXT NOT NULL
+              basket_code VARCHAR(255) NOT NULL,
+              action VARCHAR(255) NOT NULL,
+              staff_name VARCHAR(255) NOT NULL,
+              activity_time VARCHAR(255) NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS laundry_machines (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              name TEXT NOT NULL UNIQUE,
-              machine_type TEXT NOT NULL,
+              name VARCHAR(255) NOT NULL UNIQUE,
+              machine_type VARCHAR(255) NOT NULL,
               usage_percent INTEGER NOT NULL,
-              status TEXT NOT NULL
+              status VARCHAR(50) NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS laundry_reports (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              report_period TEXT NOT NULL,
+              report_period VARCHAR(255) NOT NULL,
               total_baskets_processed INTEGER NOT NULL,
-              average_turnaround TEXT NOT NULL,
+              average_turnaround VARCHAR(255) NOT NULL,
               reported_issues INTEGER NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS system_alerts (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              alert_type TEXT NOT NULL,
+              alert_type VARCHAR(255) NOT NULL,
               message TEXT NOT NULL,
-              alert_time TEXT NOT NULL
+              alert_time VARCHAR(255) NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS analytics_meal_trends (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              day_label TEXT NOT NULL UNIQUE,
+              day_label VARCHAR(255) NOT NULL UNIQUE,
               attendance_count INTEGER NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS analytics_kpis (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              name TEXT NOT NULL UNIQUE,
-              value TEXT NOT NULL,
-              delta TEXT NOT NULL
+              name VARCHAR(255) NOT NULL UNIQUE,
+              value VARCHAR(255) NOT NULL,
+              delta VARCHAR(255) NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS notifications (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              user_role TEXT NOT NULL,
-              student_id TEXT,
-              title TEXT NOT NULL,
+              user_role VARCHAR(50) NOT NULL,
+              student_id VARCHAR(255),
+              title VARCHAR(255) NOT NULL,
               message TEXT NOT NULL,
-              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
               is_read INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS audit_logs (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              actor TEXT NOT NULL,
-              action TEXT NOT NULL,
-              entity_type TEXT NOT NULL,
-              entity_ref TEXT,
-              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+              actor VARCHAR(255) NOT NULL,
+              action VARCHAR(255) NOT NULL,
+              entity_type VARCHAR(255) NOT NULL,
+              entity_ref VARCHAR(255),
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             """
         )
 
-        user_columns = [row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()]
+        user_columns = table_columns(conn, "users")
         if "room" not in user_columns:
-            conn.execute("ALTER TABLE users ADD COLUMN room TEXT")
+            conn.execute("ALTER TABLE users ADD COLUMN room VARCHAR(255)")
 
         user_count = conn.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
         if user_count == 0:
@@ -456,7 +537,7 @@ def create_app():
                 )
                 conn.commit()
                 student_id = cursor.lastrowid
-        except sqlite3.IntegrityError:
+        except DB_INTEGRITY_ERROR:
             return jsonify({"message": "A student with that email or student ID already exists."}), 409
 
         student = query_one(
@@ -510,7 +591,7 @@ def create_app():
                 log_action(conn, "admin", "created", "staff", payload["email"])
                 conn.commit()
                 staff_id = cursor.lastrowid
-        except sqlite3.IntegrityError:
+        except DB_INTEGRITY_ERROR:
             return jsonify({"message": "A staff account with that email already exists."}), 409
 
         row = query_one("SELECT id, name, email, role, status FROM users WHERE id = ?", (staff_id,))
@@ -605,7 +686,7 @@ def create_app():
                 )
                 log_action(conn, "admin", "updated", "student", payload["studentId"])
                 conn.commit()
-        except sqlite3.IntegrityError:
+        except DB_INTEGRITY_ERROR:
             return jsonify({"message": "A student with that email or student ID already exists."}), 409
 
         if result.rowcount == 0:
@@ -776,7 +857,7 @@ def create_app():
                 log_action(conn, "laundry", "created", "basket", payload["basketCode"])
                 conn.commit()
                 basket_id = cursor.lastrowid
-        except sqlite3.IntegrityError:
+        except DB_INTEGRITY_ERROR:
             return jsonify({"message": "A basket with that basket ID already exists."}), 409
 
         basket = query_one(
@@ -838,7 +919,7 @@ def create_app():
                 )
                 log_action(conn, "laundry", "updated", "basket", payload["basketCode"])
                 conn.commit()
-        except sqlite3.IntegrityError:
+        except DB_INTEGRITY_ERROR:
             return jsonify({"message": "A basket with that basket ID already exists."}), 409
 
         if result.rowcount == 0:
@@ -890,7 +971,7 @@ def create_app():
                 log_action(conn, "student", "requested", "basket", basket_code)
                 conn.commit()
                 basket_id = cursor.lastrowid
-        except sqlite3.IntegrityError:
+        except DB_INTEGRITY_ERROR:
             return jsonify({"message": "That basket ID already exists."}), 409
 
         basket = query_one(
