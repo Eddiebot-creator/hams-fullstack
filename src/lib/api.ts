@@ -78,6 +78,44 @@ export type CreateLaundryBasketPayload = {
   staffName?: string;
 };
 
+export type CreateMealPayload = {
+  type: string;
+  startTime: string;
+  endTime: string;
+  menu: string;
+  status: string;
+};
+
+export type AdminDashboard = {
+  stats: {
+    totalStudents: number;
+    mealsServedToday: number;
+    laundryBaskets: number;
+    systemUptime: string;
+  };
+  alerts: Array<{
+    id: number;
+    alertType: string;
+    message: string;
+    alertTime: string;
+  }>;
+};
+
+export type KitchenDashboard = {
+  currentMeal: Meal | null;
+  stats: {
+    totalExpected: number;
+    totalServed: number;
+  };
+  recentScans: Array<{
+    id: number;
+    studentId: string;
+    mealType: string;
+    scannedTime: string;
+    status: string;
+  }>;
+};
+
 export const api = {
   login: (payload: { email: string; password: string; role: Role }) =>
     request<{ user: Student & { role: Role } }>("/auth/login", {
@@ -90,13 +128,47 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  updateStudent: (id: number, payload: CreateStudentPayload) =>
+    request<Student>(`/students/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  deleteStudent: (id: number) =>
+    request<{ message: string }>(`/students/${id}`, {
+      method: "DELETE",
+    }),
   meals: () => request<Meal[]>("/meals"),
+  createMeal: (payload: CreateMealPayload) =>
+    request<Meal>("/meals", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateMeal: (id: number, payload: CreateMealPayload) =>
+    request<Meal>(`/meals/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  deleteMeal: (id: number) =>
+    request<{ message: string }>(`/meals/${id}`, {
+      method: "DELETE",
+    }),
   laundryBaskets: () => request<LaundryBasket[]>("/laundry/baskets"),
   createLaundryBasket: (payload: CreateLaundryBasketPayload) =>
     request<LaundryBasket>("/laundry/baskets", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  updateLaundryBasket: (id: number, payload: CreateLaundryBasketPayload) =>
+    request<LaundryBasket>(`/laundry/baskets/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  deleteLaundryBasket: (id: number) =>
+    request<{ message: string }>(`/laundry/baskets/${id}`, {
+      method: "DELETE",
+    }),
+  adminDashboard: () => request<AdminDashboard>("/admin/dashboard"),
+  kitchenDashboard: () => request<KitchenDashboard>("/kitchen/dashboard"),
   studentOverview: (studentId: string) => request<StudentOverview>(`/student/${studentId}/overview`),
   scanMeal: (mealId: number, studentId: string) =>
     request<{ message: string; studentId: string; meal: Meal }>(`/meals/${mealId}/scan`, {

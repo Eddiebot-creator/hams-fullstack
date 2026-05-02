@@ -1,25 +1,172 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
-import { Plus, Edit2, Trash2 } from "lucide-react";
+import { Clock, Edit2, Plus, Trash2, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
+import { Input } from "@/src/components/ui/input";
 import { api, type Meal } from "@/src/lib/api";
+
+const emptyForm = {
+  type: "",
+  startTime: "",
+  endTime: "",
+  menu: "",
+  status: "Upcoming",
+};
 
 export default function AdminMeals() {
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState(emptyForm);
 
   useEffect(() => {
     api.meals().then(setMeals).catch(console.error);
   }, []);
 
+  const updateForm = (field: keyof typeof form, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const resetForm = () => {
+    setForm(emptyForm);
+    setEditingId(null);
+    setError("");
+  };
+
+  const startEdit = (meal: Meal) => {
+    setForm({
+      type: meal.type,
+      startTime: meal.startTime,
+      endTime: meal.endTime,
+      menu: meal.menu,
+      status: meal.status,
+    });
+    setEditingId(meal.id);
+    setIsEditing(true);
+    setError("");
+  };
+
+  const handleSaveMeal = async (event: FormEvent) => {
+    event.preventDefault();
+    setIsSaving(true);
+    setError("");
+
+    try {
+      const meal = editingId ? await api.updateMeal(editingId, form) : await api.createMeal(form);
+      setMeals((current) => editingId ? current.map((item) => item.id === editingId ? meal : item) : [...current, meal]);
+      resetForm();
+      setIsEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save meal.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteMeal = async (meal: Meal) => {
+    if (!window.confirm(`Delete ${meal.type}? This also removes its scan records.`)) return;
+
+    try {
+      await api.deleteMeal(meal.id);
+      setMeals((current) => current.filter((item) => item.id !== meal.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete meal.");
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-neutral-900">Manage Meals</h1>
-        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">
+        <Button onClick={() => { resetForm(); setIsEditing((value) => !value); }} className="bg-indigo-600 hover:bg-indigo-700 text-white">
           <Plus className="w-4 h-4 mr-2" />
           Add Meal
         </Button>
       </div>
+
+      {isEditing && (
+        <motion.form
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          onSubmit={handleSaveMeal}
+          className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden"
+        >
+          <div className="border-b border-neutral-100 bg-neutral-50 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center">
+                <UtensilsCrossed className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-neutral-900">{editingId ? "Edit meal" : "New meal"}</h2>
+                <p className="text-sm text-neutral-500">Set meal windows and menu details for kitchen scanning.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-5">
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <UtensilsCrossed className="w-4 h-4 text-neutral-400" />
+                  Meal type
+                </span>
+                <Input required placeholder="Breakfast" value={form.type} onChange={(event) => updateForm("type", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-neutral-400" />
+                  Start time
+                </span>
+                <Input required placeholder="07:30 AM" value={form.startTime} onChange={(event) => updateForm("startTime", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-neutral-400" />
+                  End time
+                </span>
+                <Input required placeholder="09:30 AM" value={form.endTime} onChange={(event) => updateForm("endTime", event.target.value)} />
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700">Status</span>
+                <select
+                  value={form.status}
+                  onChange={(event) => updateForm("status", event.target.value)}
+                  className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                >
+                  <option value="Completed">Completed</option>
+                  <option value="Active">Active</option>
+                  <option value="Upcoming">Upcoming</option>
+                </select>
+              </label>
+
+              <label className="space-y-2 md:col-span-2 xl:col-span-1">
+                <span className="text-sm font-medium text-neutral-700">Menu</span>
+                <Input required placeholder="Rice, chicken, salad" value={form.menu} onChange={(event) => updateForm("menu", event.target.value)} />
+              </label>
+            </div>
+
+            {error && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                {error}
+              </div>
+            )}
+          </div>
+
+          <div className="px-6 py-4 border-t border-neutral-100 bg-neutral-50 flex justify-end gap-3">
+            <Button type="button" variant="outline" onClick={() => { resetForm(); setIsEditing(false); }}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+              {isSaving ? "Saving..." : editingId ? "Update Meal" : "Save Meal"}
+            </Button>
+          </div>
+        </motion.form>
+      )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden">
         <div className="overflow-x-auto">
@@ -34,8 +181,8 @@ export default function AdminMeals() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-neutral-200">
-              {meals.map((meal, i) => (
-                <tr key={i} className="hover:bg-neutral-50 transition-colors">
+              {meals.map((meal) => (
+                <tr key={meal.id} className="hover:bg-neutral-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">{meal.type}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{meal.startTime} - {meal.endTime}</td>
                   <td className="px-6 py-4 text-sm text-neutral-500 truncate max-w-xs">{meal.menu}</td>
@@ -49,15 +196,20 @@ export default function AdminMeals() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button className="text-indigo-600 hover:text-indigo-900 mr-3">
+                    <button onClick={() => startEdit(meal)} className="text-indigo-600 hover:text-indigo-900 mr-3" title="Edit meal">
                       <Edit2 className="w-4 h-4" />
                     </button>
-                    <button className="text-red-600 hover:text-red-900">
+                    <button onClick={() => handleDeleteMeal(meal)} className="text-red-600 hover:text-red-900" title="Delete meal">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
                 </tr>
               ))}
+              {meals.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-10 text-center text-sm text-neutral-500">No meals yet.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

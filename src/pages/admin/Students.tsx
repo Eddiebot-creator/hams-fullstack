@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
-import { BookOpen, Building2, IdCard, Mail, Phone, Search, User, UserPlus, MoreVertical } from "lucide-react";
+import { BookOpen, Building2, Edit2, IdCard, Mail, Phone, Search, Trash2, User, UserPlus } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type Student } from "@/src/lib/api";
@@ -11,6 +11,7 @@ export default function AdminStudents() {
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({
     name: "",
     studentId: "",
@@ -50,6 +51,23 @@ export default function AdminStudents() {
       phone: "",
       status: "Active",
     });
+    setEditingId(null);
+  };
+
+  const startEdit = (student: Student) => {
+    setForm({
+      name: student.name,
+      studentId: student.studentId,
+      email: student.email,
+      hostel: student.hostel,
+      course: student.course,
+      level: student.level,
+      phone: student.phone ?? "",
+      status: student.status,
+    });
+    setEditingId(student.id);
+    setIsAdding(true);
+    setError("");
   };
 
   const handleAddStudent = async (event: FormEvent) => {
@@ -58,14 +76,28 @@ export default function AdminStudents() {
     setError("");
 
     try {
-      const student = await api.createStudent(form);
-      setStudents((current) => [...current, student].sort((a, b) => a.name.localeCompare(b.name)));
+      const student = editingId ? await api.updateStudent(editingId, form) : await api.createStudent(form);
+      setStudents((current) => {
+        const next = editingId ? current.map((item) => item.id === editingId ? student : item) : [...current, student];
+        return next.sort((a, b) => a.name.localeCompare(b.name));
+      });
       resetForm();
       setIsAdding(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to add student.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteStudent = async (student: Student) => {
+    if (!window.confirm(`Delete ${student.name}? This removes the student record and related meal/laundry records.`)) return;
+
+    try {
+      await api.deleteStudent(student.id);
+      setStudents((current) => current.filter((item) => item.id !== student.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete student.");
     }
   };
 
@@ -92,7 +124,7 @@ export default function AdminStudents() {
                 <UserPlus className="w-5 h-5 text-indigo-600" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-neutral-900">New student profile</h2>
+                <h2 className="text-base font-semibold text-neutral-900">{editingId ? "Edit student profile" : "New student profile"}</h2>
                 <p className="text-sm text-neutral-500">Fill the key details used for login, hostel records, meals, and laundry.</p>
               </div>
             </div>
@@ -180,7 +212,7 @@ export default function AdminStudents() {
               Cancel
             </Button>
             <Button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-              {isSaving ? "Saving..." : "Save Student"}
+              {isSaving ? "Saving..." : editingId ? "Update Student" : "Save Student"}
             </Button>
             </div>
           </div>
@@ -230,8 +262,11 @@ export default function AdminStudents() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button className="text-neutral-400 hover:text-neutral-600">
-                      <MoreVertical className="h-5 w-5" />
+                    <button onClick={() => startEdit(student)} className="text-indigo-600 hover:text-indigo-900 mr-3" title="Edit student">
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => handleDeleteStudent(student)} className="text-red-600 hover:text-red-900" title="Delete student">
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </td>
                 </tr>

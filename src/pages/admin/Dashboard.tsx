@@ -1,7 +1,22 @@
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Users, UtensilsCrossed, Shirt, TrendingUp } from "lucide-react";
+import { api, type AdminDashboard as AdminDashboardData } from "@/src/lib/api";
 
 export default function AdminDashboard() {
+  const [dashboard, setDashboard] = useState<AdminDashboardData | null>(null);
+
+  useEffect(() => {
+    api.adminDashboard().then(setDashboard).catch(console.error);
+  }, []);
+
+  const stats = [
+    { title: 'Total Students', value: dashboard?.stats.totalStudents.toLocaleString() ?? '...', icon: Users, color: 'text-blue-600', bg: 'bg-blue-100' },
+    { title: 'Meals Served Today', value: dashboard?.stats.mealsServedToday.toLocaleString() ?? '...', icon: UtensilsCrossed, color: 'text-green-600', bg: 'bg-green-100' },
+    { title: 'Laundry Baskets', value: dashboard?.stats.laundryBaskets.toLocaleString() ?? '...', icon: Shirt, color: 'text-indigo-600', bg: 'bg-indigo-100' },
+    { title: 'System Uptime', value: dashboard?.stats.systemUptime ?? '...', icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-100' },
+  ];
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -9,12 +24,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          { title: 'Total Students', value: '1,240', icon: Users, color: 'text-blue-600', bg: 'bg-blue-100' },
-          { title: 'Meals Served Today', value: '842', icon: UtensilsCrossed, color: 'text-green-600', bg: 'bg-green-100' },
-          { title: 'Laundry Baskets', value: '47', icon: Shirt, color: 'text-indigo-600', bg: 'bg-indigo-100' },
-          { title: 'System Uptime', value: '99.9%', icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-100' },
-        ].map((stat, i) => (
+        {stats.map((stat, i) => (
           <motion.div
             key={i}
             initial={{ opacity: 0, y: 20 }}
@@ -42,22 +52,19 @@ export default function AdminDashboard() {
         >
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">Recent System Alerts</h2>
           <div className="space-y-4">
-            {[
-              { type: 'warning', message: 'High load on Kitchen Scanner 2', time: '10 mins ago' },
-              { type: 'info', message: 'Database backup completed successfully', time: '1 hour ago' },
-              { type: 'error', message: 'Laundry Machine 4 reported error code E-02', time: '2 hours ago' },
-            ].map((alert, i) => (
+            {(dashboard?.alerts ?? []).map((alert, i) => (
               <div key={i} className={`p-4 rounded-xl border ${
-                alert.type === 'warning' ? 'bg-yellow-50 border-yellow-100 text-yellow-800' :
-                alert.type === 'error' ? 'bg-red-50 border-red-100 text-red-800' :
+                alert.alertType === 'warning' ? 'bg-yellow-50 border-yellow-100 text-yellow-800' :
+                alert.alertType === 'error' ? 'bg-red-50 border-red-100 text-red-800' :
                 'bg-blue-50 border-blue-100 text-blue-800'
               }`}>
                 <div className="flex justify-between">
                   <p className="text-sm font-medium">{alert.message}</p>
-                  <p className="text-xs opacity-70">{alert.time}</p>
+                  <p className="text-xs opacity-70">{alert.alertTime}</p>
                 </div>
               </div>
             ))}
+            {dashboard?.alerts.length === 0 && <p className="text-sm text-neutral-500">No alerts right now.</p>}
           </div>
         </motion.div>
 

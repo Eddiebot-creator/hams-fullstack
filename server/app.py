@@ -411,6 +411,67 @@ def create_app():
         )
         return jsonify(student), 201
 
+    @app.put("/api/students/<int:user_id>")
+    def update_student(user_id):
+        payload = request.get_json(silent=True) or {}
+        required_fields = ["name", "email", "studentId", "hostel", "course", "level", "status"]
+        missing_fields = [field for field in required_fields if not payload.get(field)]
+
+        if missing_fields:
+            return jsonify({"message": f"Missing required fields: {', '.join(missing_fields)}."}), 400
+
+        try:
+            with get_connection() as conn:
+                result = conn.execute(
+                    """
+                    UPDATE users
+                    SET name = ?, email = ?, student_id = ?, hostel = ?, course = ?, level = ?, phone = ?, status = ?
+                    WHERE id = ? AND role = 'student'
+                    """,
+                    (
+                        payload["name"],
+                        payload["email"],
+                        payload["studentId"],
+                        payload["hostel"],
+                        payload["course"],
+                        payload["level"],
+                        payload.get("phone", ""),
+                        payload["status"],
+                        user_id,
+                    ),
+                )
+                conn.commit()
+        except sqlite3.IntegrityError:
+            return jsonify({"message": "A student with that email or student ID already exists."}), 409
+
+        if result.rowcount == 0:
+            return jsonify({"message": "Student not found."}), 404
+
+        student = query_one(
+            """
+            SELECT id, name, email, student_id AS studentId, hostel, course, level, phone, status
+            FROM users
+            WHERE id = ?
+            """,
+            (user_id,),
+        )
+        return jsonify(student)
+
+    @app.delete("/api/students/<int:user_id>")
+    def delete_student(user_id):
+        with get_connection() as conn:
+            student = conn.execute("SELECT student_id FROM users WHERE id = ? AND role = 'student'", (user_id,)).fetchone()
+            if student is None:
+                return jsonify({"message": "Student not found."}), 404
+
+            student_id = student["student_id"]
+            conn.execute("DELETE FROM meal_scans WHERE student_id = ?", (student_id,))
+            conn.execute("DELETE FROM laundry_baskets WHERE student_id = ?", (student_id,))
+            conn.execute("DELETE FROM users WHERE id = ? AND role = 'student'", (user_id,))
+            conn.commit()
+
+        return jsonify({"message": "Student deleted."})
+
     @app.get("/api/meals")
     def meals():
         return jsonify(
@@ -422,6 +483,70 @@ def create_app():
                 """
             )
         )
+
+    @app.post("/api/meals")
+    def create_meal():
+        payload = request.get_json(silent=True) or {}
+        required_fields = ["type", "startTime", "endTime", "menu", "status"]
+        missing_fields = [field for field in required_fields if not payload.get(field)]
+
+        if missing_fields:
+            return jsonify({"message": f"Missing required fields: {', '.join(missing_fields)}."}), 400
+
+        with get_connection() as conn:
+            cursor = conn.execute(
+                "INSERT INTO meals (type, start_time, end_time, menu, status) VALUES (?, ?, ?, ?, ?)",
+                (payload["type"], payload["startTime"], payload["endTime"], payload["menu"], payload["status"]),
+            )
+            conn.commit()
+            meal_id = cursor.lastrowid
+
+        meal = query_one(
+            "SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?",
+            (meal_id,),
+        )
+        return jsonify(meal), 201
+
+    @app.put("/api/meals/<int:meal_id>")
+    def update_meal(meal_id):
+        payload = request.get_json(silent=True) or {}
+        required_fields = ["type", "startTime", "endTime", "menu", "status"]
+        missing_fields = [field for field in required_fields if not payload.get(field)]
+
+        if missing_fields:
+            return jsonify({"message": f"Missing required fields: {', '.join(missing_fields)}."}), 400
+
+        with get_connection() as conn:
+            result = conn.execute(
+                """
+                UPDATE meals
+                SET type = ?, start_time = ?, end_time = ?, menu = ?, status = ?
+                WHERE id = ?
+                """,
+                (payload["type"], payload["startTime"], payload["endTime"], payload["menu"], payload["status"], meal_id),
+            )
+            conn.commit()
+
+        if result.rowcount == 0:
+            return jsonify({"message": "Meal not found."}), 404
+
+        meal = query_one(
+            "SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?",
+            (meal_id,),
+        )
+        return jsonify(meal)
+
+    @app.delete("/api/meals/<int:meal_id>")
+    def delete_meal(meal_id):
+        with get_connection() as conn:
+            conn.execute("DELETE FROM meal_scans WHERE meal_id = ?", (meal_id,))
+            result = conn.execute("DELETE FROM meals WHERE id = ?", (meal_id,))
+            conn.commit()
+
+        if result.rowcount == 0:
+            return jsonify({"message": "Meal not found."}), 404
+
+        return jsonify({"message": "Meal deleted."})
 
     @app.get("/api/laundry/baskets")
     def laundry_baskets():
@@ -488,6 +613,92 @@ def create_app():
             (basket_id,),
         )
         return jsonify(basket), 201
+
+    @app.put("/api/laundry/baskets/<int:basket_id>")
+    def update_laundry_basket(basket_id):
+        payload = request.get_json(silent=True) or {}
+        required_fields = ["basketCode", "studentId", "status", "receivedAt"]
+        missing_fields = [field for field in required_fields if not payload.get(field)]
+
+        if missing_fields:
+            return jsonify({"message": f"Missing required fields: {', '.join(missing_fields)}."}), 400
+
+        try:
+            with get_connection() as conn:
+                result = conn.execute(
+                    """
+                    UPDATE laundry_baskets
+                    SET basket_code = ?, student_id = ?, status = ?, received_at = ?, estimated_finish = ?, notes = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        payload["basketCode"],
+                        payload["studentId"],
+                        payload["status"],
+                        payload["receivedAt"],
+                        payload.get("estimatedFinish"),
+                        payload.get("notes"),
+                        basket_id,
+                    ),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO laundry_activity (basket_code, action, staff_name, activity_time)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        payload["basketCode"],
+                        f"Status Updated to {payload['status']}",
+                        payload.get("staffName", "Laundry Staff"),
+                        payload["receivedAt"],
+                    ),
+                )
+                conn.commit()
+        except sqlite3.IntegrityError:
+            return jsonify({"message": "A basket with that basket ID already exists."}), 409
+
+        if result.rowcount == 0:
+            return jsonify({"message": "Basket not found."}), 404
+
+        basket = query_one(
+            """
+            SELECT id, basket_code AS basketCode, student_id AS studentId, status,
+                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+            FROM laundry_baskets
+            WHERE id = ?
+            """,
+            (basket_id,),
+        )
+        return jsonify(basket)
+
+    @app.delete("/api/laundry/baskets/<int:basket_id>")
+    def delete_laundry_basket(basket_id):
+        with get_connection() as conn:
+            result = conn.execute("DELETE FROM laundry_baskets WHERE id = ?", (basket_id,))
+            conn.commit()
+
+        if result.rowcount == 0:
+            return jsonify({"message": "Basket not found."}), 404
+
+        return jsonify({"message": "Basket deleted."})
+
+    @app.get("/api/admin/dashboard")
+    def admin_dashboard():
+        stats = {
+            "totalStudents": query_one("SELECT COUNT(*) AS count FROM users WHERE role = 'student'")["count"],
+            "mealsServedToday": table_count_value("meal_scans"),
+            "laundryBaskets": table_count_value("laundry_baskets"),
+            "systemUptime": "99.9%",
+        }
+        alerts = query_all(
+            """
+            SELECT id, alert_type AS alertType, message, alert_time AS alertTime
+            FROM system_alerts
+            ORDER BY id DESC
+            LIMIT 5
+            """
+        )
+        return jsonify({"stats": stats, "alerts": alerts})
 
     @app.get("/api/kitchen/dashboard")
     def kitchen_dashboard():

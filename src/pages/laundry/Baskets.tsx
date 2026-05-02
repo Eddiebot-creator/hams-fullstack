@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
-import { CalendarClock, ClipboardList, IdCard, PackagePlus, Search, Filter, MoreHorizontal, StickyNote, UserRound } from "lucide-react";
+import { CalendarClock, ClipboardList, Edit2, IdCard, PackagePlus, Search, Filter, StickyNote, Trash2, UserRound } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type LaundryBasket } from "@/src/lib/api";
@@ -11,6 +11,7 @@ export default function LaundryBaskets() {
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({
     basketCode: "",
     studentId: "",
@@ -48,6 +49,22 @@ export default function LaundryBaskets() {
       notes: "",
       staffName: "",
     });
+    setEditingId(null);
+  };
+
+  const startEdit = (basket: LaundryBasket) => {
+    setForm({
+      basketCode: basket.basketCode,
+      studentId: basket.studentId,
+      status: basket.status,
+      receivedAt: basket.receivedAt,
+      estimatedFinish: basket.estimatedFinish ?? "",
+      notes: basket.notes ?? "",
+      staffName: "",
+    });
+    setEditingId(basket.id);
+    setIsAdding(true);
+    setError("");
   };
 
   const handleAddBasket = async (event: FormEvent) => {
@@ -56,14 +73,25 @@ export default function LaundryBaskets() {
     setError("");
 
     try {
-      const basket = await api.createLaundryBasket(form);
-      setBaskets((current) => [basket, ...current]);
+      const basket = editingId ? await api.updateLaundryBasket(editingId, form) : await api.createLaundryBasket(form);
+      setBaskets((current) => editingId ? current.map((item) => item.id === editingId ? basket : item) : [basket, ...current]);
       resetForm();
       setIsAdding(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to add basket.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteBasket = async (basket: LaundryBasket) => {
+    if (!window.confirm(`Delete basket #${basket.basketCode}?`)) return;
+
+    try {
+      await api.deleteLaundryBasket(basket.id);
+      setBaskets((current) => current.filter((item) => item.id !== basket.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete basket.");
     }
   };
 
@@ -90,7 +118,7 @@ export default function LaundryBaskets() {
                 <PackagePlus className="w-5 h-5 text-indigo-600" />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-neutral-900">New laundry basket</h2>
+                <h2 className="text-base font-semibold text-neutral-900">{editingId ? "Edit laundry basket" : "New laundry basket"}</h2>
                 <p className="text-sm text-neutral-500">Register a drop-off and add it to laundry activity in one step.</p>
               </div>
             </div>
@@ -175,7 +203,7 @@ export default function LaundryBaskets() {
                 Cancel
               </Button>
               <Button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-                {isSaving ? "Saving..." : "Save Basket"}
+                {isSaving ? "Saving..." : editingId ? "Update Basket" : "Save Basket"}
               </Button>
             </div>
           </div>
@@ -230,8 +258,11 @@ export default function LaundryBaskets() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{basket.receivedAt}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button className="text-neutral-400 hover:text-neutral-600">
-                      <MoreHorizontal className="h-5 w-5" />
+                    <button onClick={() => startEdit(basket)} className="text-indigo-600 hover:text-indigo-900 mr-3" title="Edit basket">
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => handleDeleteBasket(basket)} className="text-red-600 hover:text-red-900" title="Delete basket">
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </td>
                 </tr>

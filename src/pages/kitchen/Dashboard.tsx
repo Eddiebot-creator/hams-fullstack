@@ -1,7 +1,20 @@
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { UtensilsCrossed, Users, CheckCircle2, Clock } from "lucide-react";
+import { api, type KitchenDashboard as KitchenDashboardData } from "@/src/lib/api";
 
 export default function KitchenDashboard() {
+  const [dashboard, setDashboard] = useState<KitchenDashboardData | null>(null);
+
+  useEffect(() => {
+    api.kitchenDashboard().then(setDashboard).catch(console.error);
+  }, []);
+
+  const currentMeal = dashboard?.currentMeal;
+  const totalExpected = dashboard?.stats.totalExpected ?? 0;
+  const totalServed = dashboard?.stats.totalServed ?? 0;
+  const servedPercent = totalExpected > 0 ? Math.min(100, Math.round((totalServed / totalExpected) * 100)) : 0;
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -16,24 +29,24 @@ export default function KitchenDashboard() {
         >
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-neutral-900">Current Meal</h2>
-            <span className="text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full">Active</span>
+            <span className="text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full">{currentMeal?.status ?? "Loading"}</span>
           </div>
           <div className="flex items-center mb-4">
             <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mr-4">
               <UtensilsCrossed className="w-6 h-6 text-indigo-600" />
             </div>
             <div>
-              <p className="font-bold text-xl text-neutral-900">Breakfast</p>
-              <p className="text-sm text-neutral-500">07:00 AM - 09:00 AM</p>
+              <p className="font-bold text-xl text-neutral-900">{currentMeal?.type ?? "No active meal"}</p>
+              <p className="text-sm text-neutral-500">{currentMeal ? `${currentMeal.startTime} - ${currentMeal.endTime}` : "Update meal schedule"}</p>
             </div>
           </div>
           <div className="mt-6">
             <div className="flex justify-between text-sm mb-1">
               <span className="font-medium text-neutral-700">Served</span>
-              <span className="font-bold text-indigo-600">342 / 500</span>
+              <span className="font-bold text-indigo-600">{totalServed} / {totalExpected}</span>
             </div>
             <div className="w-full bg-neutral-100 rounded-full h-2.5">
-              <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: '68%' }}></div>
+              <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${servedPercent}%` }}></div>
             </div>
           </div>
         </motion.div>
@@ -52,14 +65,14 @@ export default function KitchenDashboard() {
               <Users className="w-5 h-5 text-indigo-500 mr-3" />
               <div>
                 <p className="text-xs text-neutral-500 uppercase tracking-wider">Total Expected</p>
-                <p className="font-bold text-lg text-neutral-900">1,500</p>
+                <p className="font-bold text-lg text-neutral-900">{totalExpected}</p>
               </div>
             </div>
             <div className="flex items-center p-3 rounded-xl bg-neutral-50 border border-neutral-100">
               <CheckCircle2 className="w-5 h-5 text-green-500 mr-3" />
               <div>
                 <p className="text-xs text-neutral-500 uppercase tracking-wider">Total Served</p>
-                <p className="font-bold text-lg text-neutral-900">842</p>
+                <p className="font-bold text-lg text-neutral-900">{totalServed}</p>
               </div>
             </div>
           </div>
@@ -108,16 +121,11 @@ export default function KitchenDashboard() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-neutral-200">
-              {[
-                { time: '07:20 AM', id: '241156894', meal: 'Breakfast', status: 'Success' },
-                { time: '07:45 AM', id: '20221453', meal: 'Breakfast', status: 'Success' },
-                { time: '08:42 AM', id: '20231452', meal: 'Breakfast', status: 'Denied (Already Scanned)' },
-                { time: '08:45 AM', id: '20237775', meal: 'Breakfast', status: 'Success' },
-              ].map((scan, i) => (
+              {(dashboard?.recentScans ?? []).map((scan, i) => (
                 <tr key={i}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{scan.time}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900 font-mono">{scan.id}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{scan.meal}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{scan.scannedTime}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900 font-mono">{scan.studentId}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{scan.mealType}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       scan.status === 'Success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
