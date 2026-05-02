@@ -74,9 +74,6 @@ export default function Login() {
 
               <div className="space-y-4 max-w-2xl">
                 <h2 className="text-2xl sm:text-3xl font-bold text-neutral-950">One place for meals, laundry, students, and staff operations.</h2>
-                <p className="text-base text-neutral-600 leading-7">
-                  Choose a role to enter the right workspace. Each demo account is already prepared so you can explore the dashboards quickly.
-                </p>
               </div>
             </div>
           </div>
