@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
-import { ArrowRight, CheckCircle2, Lock, Mail, ShieldAlert, Shirt, Sparkles, User, UtensilsCrossed } from "lucide-react";
+import { ArrowRight, Lock, Mail, ShieldAlert, Shirt, User, UtensilsCrossed } from "lucide-react";
 import { api, type Role } from "@/src/lib/api";
 
 const roleOptions: Array<{
@@ -60,7 +60,7 @@ export default function Login() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-white border border-neutral-100 rounded-2xl shadow-sm overflow-hidden"
         >
-          <div className="p-6 sm:p-8 lg:p-10 h-full flex flex-col justify-between gap-10">
+          <div className="p-6 sm:p-8 lg:p-10 h-full flex flex-col justify-center gap-10">
             <div className="space-y-8">
               <div className="flex items-center gap-4">
                 <div className="w-20 h-20 rounded-2xl bg-neutral-50 border border-neutral-100 flex items-center justify-center overflow-hidden">
@@ -77,31 +77,6 @@ export default function Login() {
                 <p className="text-base text-neutral-600 leading-7">
                   Choose a role to enter the right workspace. Each demo account is already prepared so you can explore the dashboards quickly.
                 </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
-                  "Role-based access",
-                  "Live backend data",
-                  "SQLite records",
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-2 rounded-xl border border-neutral-100 bg-neutral-50 px-3 py-3 text-sm font-medium text-neutral-700">
-                    <CheckCircle2 className="w-4 h-4 text-green-600" />
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-5">
-              <div className="flex items-start gap-3">
-                <Sparkles className="w-5 h-5 text-indigo-600 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-neutral-900">Demo access</p>
-                  <p className="text-sm text-neutral-600 mt-1">
-                    The selected role automatically fills its email. Every demo account uses password <span className="font-semibold text-neutral-900">password</span>.
-                  </p>
-                </div>
               </div>
             </div>
           </div>
