@@ -6,6 +6,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Account from "./pages/Account";
+import Notifications from "./pages/Notifications";
 import Layout from "./components/layout/Layout";
 
 // Student Pages
@@ -21,6 +22,7 @@ import KitchenScanner from "./pages/kitchen/Scanner";
 // Laundry Staff Pages
 import LaundryDashboard from "./pages/laundry/Dashboard";
 import LaundryBaskets from "./pages/laundry/Baskets";
+import LaundryBoard from "./pages/laundry/Board";
 import LaundryReports from "./pages/laundry/Reports";
 import LaundryScanner from "./pages/laundry/Scanner";
 
@@ -49,6 +51,7 @@ export default function App() {
           <Route path="qr" element={<StudentQR />} />
           <Route path="laundry" element={<StudentLaundry />} />
           <Route path="profile" element={<StudentProfile />} />
+          <Route path="notifications" element={<Notifications />} />
         </Route>
 
         {/* Kitchen Routes */}
@@ -56,15 +59,18 @@ export default function App() {
           <Route index element={<KitchenDashboard />} />
           <Route path="scanner" element={<KitchenScanner />} />
           <Route path="account" element={<Account />} />
+          <Route path="notifications" element={<Notifications />} />
         </Route>
 
         {/* Laundry Staff Routes */}
         <Route path="/laundry-staff" element={<ProtectedLayout role="laundry" />}>
           <Route index element={<LaundryDashboard />} />
           <Route path="baskets" element={<LaundryBaskets />} />
+          <Route path="board" element={<LaundryBoard />} />
           <Route path="reports" element={<LaundryReports />} />
           <Route path="scanner" element={<LaundryScanner />} />
           <Route path="account" element={<Account />} />
+          <Route path="notifications" element={<Notifications />} />
         </Route>
 
         {/* Admin Routes */}
@@ -76,6 +82,7 @@ export default function App() {
           <Route path="analytics" element={<AdminAnalytics />} />
           <Route path="audit" element={<AdminAudit />} />
           <Route path="account" element={<Account />} />
+          <Route path="notifications" element={<Notifications />} />
         </Route>
 
         <Route path="/" element={<Navigate to="/login" replace />} />

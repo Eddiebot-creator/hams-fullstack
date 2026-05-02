@@ -248,6 +248,11 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
+  updateLaundryBasketStatus: (id: number, payload: { status: string; staffName?: string }) =>
+    request<LaundryBasket>(`/laundry/baskets/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
   deleteLaundryBasket: (id: number) =>
     request<{ message: string }>(`/laundry/baskets/${id}`, {
       method: "DELETE",
@@ -277,7 +282,7 @@ export const api = {
   exportUrl: (kind: "students" | "meals" | "baskets" | "audits") => `${API_BASE_URL}/export/${kind}`,
   studentOverview: (studentId: string) => request<StudentOverview>(`/student/${studentId}/overview`),
   scanMeal: (mealId: number, studentId: string) =>
-    request<{ message: string; studentId: string; meal: Meal }>(`/meals/${mealId}/scan`, {
+    request<{ message: string; studentId: string; meal: Meal; student: Student }>(`/meals/${mealId}/scan`, {
       method: "POST",
       body: JSON.stringify({ studentId }),
     }),

@@ -897,6 +897,52 @@ def create_app():
             )
         )
 
+    @app.patch("/api/laundry/baskets/<int:basket_id>/status")
+    def update_laundry_basket_status(basket_id):
+        payload = request.get_json(silent=True) or {}
+        status = payload.get("status")
+        staff_name = payload.get("staffName", "Laundry Staff")
+
+        if status not in ["Pending Approval", "Pending", "Washing", "Ready", "Picked Up"]:
+            return jsonify({"message": "Invalid basket status."}), 400
+
+        with get_connection() as conn:
+            basket = conn.execute(
+                "SELECT basket_code AS basketCode, student_id AS studentId FROM laundry_baskets WHERE id = ?",
+                (basket_id,),
+            ).fetchone()
+            if basket is None:
+                return jsonify({"message": "Basket not found."}), 404
+
+            result = conn.execute("UPDATE laundry_baskets SET status = ? WHERE id = ?", (status, basket_id))
+            conn.execute(
+                "INSERT INTO laundry_activity (basket_code, action, staff_name, activity_time) VALUES (?, ?, ?, ?)",
+                (basket["basketCode"], f"Moved to {status}", staff_name, "Now"),
+            )
+            create_notification(
+                conn,
+                "student",
+                "Laundry status updated",
+                f"Basket #{basket['basketCode']} is now {status}.",
+                basket["studentId"],
+            )
+            log_action(conn, "laundry", "updated status", "basket", basket["basketCode"])
+            conn.commit()
+
+        if result.rowcount == 0:
+            return jsonify({"message": "Basket not found."}), 404
+
+        updated = query_one(
+            """
+            SELECT id, basket_code AS basketCode, student_id AS studentId, status,
+                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+            FROM laundry_baskets
+            WHERE id = ?
+            """,
+            (basket_id,),
+        )
+        return jsonify(updated)
+
     @app.post("/api/laundry/baskets")
     def create_laundry_basket():
         payload = request.get_json(silent=True) or {}
@@ -1326,6 +1372,28 @@ def create_app():
         meal = query_one("SELECT id, type FROM meals WHERE id = ?", (meal_id,))
         if meal is None:
             return jsonify({"message": "Meal not found."}), 404
+        student = query_one(
+            """
+            SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, status
+            FROM users
+            WHERE role = 'student' AND student_id = ?
+            """,
+            (student_id,),
+        )
+        if student is None:
+            return jsonify({"message": "Student not found."}), 404
+        if student["status"] != "Active":
+            with get_connection() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO kitchen_scan_logs (student_id, meal_type, scanned_time, status)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (student_id, meal["type"], "Now", "Denied (Inactive Student)"),
+                )
+                log_action(conn, "kitchen", "denied inactive student", "meal", f"{student_id}:{meal['type']}")
+                conn.commit()
+            return jsonify({"message": f"{student['name']} is inactive and cannot be approved."}), 403
 
         existing = query_one("SELECT id FROM meal_scans WHERE student_id = ? AND meal_id = ?", (student_id, meal_id))
         if existing is not None:
@@ -1354,7 +1422,7 @@ def create_app():
             log_action(conn, "kitchen", "approved scan", "meal", f"{student_id}:{meal['type']}")
             conn.commit()
 
-        return jsonify({"message": "Meal approved.", "studentId": student_id, "meal": meal}), 201
+        return jsonify({"message": "Meal approved.", "studentId": student_id, "meal": meal, "student": student}), 201
 
     @app.get("/")
     def serve_frontend_index():

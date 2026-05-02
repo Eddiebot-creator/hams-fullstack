@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { Users, UtensilsCrossed, Shirt, TrendingUp } from "lucide-react";
-import { api, type AdminDashboard as AdminDashboardData } from "@/src/lib/api";
+import { Activity, Users, UtensilsCrossed, Shirt, TrendingUp } from "lucide-react";
+import { api, type AdminDashboard as AdminDashboardData, type AuditLog, type LaundryBasket } from "@/src/lib/api";
 
 export default function AdminDashboard() {
   const [dashboard, setDashboard] = useState<AdminDashboardData | null>(null);
+  const [baskets, setBaskets] = useState<LaundryBasket[]>([]);
+  const [audits, setAudits] = useState<AuditLog[]>([]);
 
   useEffect(() => {
     api.adminDashboard().then(setDashboard).catch(console.error);
+    api.laundryBaskets().then(setBaskets).catch(console.error);
+    api.auditLogs().then(setAudits).catch(console.error);
   }, []);
 
   const stats = [
@@ -17,6 +21,7 @@ export default function AdminDashboard() {
     { title: 'Laundry Baskets', value: dashboard?.stats.laundryBaskets.toLocaleString() ?? '...', icon: Shirt, color: 'text-indigo-600', bg: 'bg-indigo-100' },
     { title: 'System Uptime', value: dashboard?.stats.systemUptime ?? '...', icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-100' },
   ];
+  const pendingApprovals = baskets.filter((basket) => basket.status === "Pending Approval");
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
@@ -44,12 +49,12 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-100"
+          className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-100 lg:col-span-1"
         >
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">Recent System Alerts</h2>
           <div className="space-y-4">
@@ -66,6 +71,30 @@ export default function AdminDashboard() {
               </div>
             ))}
             {dashboard?.alerts.length === 0 && <p className="text-sm text-neutral-500">No alerts right now.</p>}
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45 }}
+          className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-100"
+        >
+          <h2 className="text-lg font-semibold text-neutral-900 mb-4">Pending Laundry Approvals</h2>
+          <div className="space-y-3">
+            {pendingApprovals.length === 0 ? (
+              <p className="text-sm text-neutral-500">No pending laundry approvals.</p>
+            ) : (
+              pendingApprovals.slice(0, 4).map((basket) => (
+                <Link key={basket.id} to="/laundry-staff/board" className="block rounded-xl border border-yellow-100 bg-yellow-50 p-3 hover:shadow-md transition-all">
+                  <div className="flex items-center justify-between">
+                    <p className="font-semibold text-yellow-900">#{basket.basketCode}</p>
+                    <p className="text-xs font-mono text-yellow-700">{basket.studentId}</p>
+                  </div>
+                  <p className="text-xs text-yellow-700 mt-1">{basket.receivedAt}</p>
+                </Link>
+              ))
+            )}
           </div>
         </motion.div>
 
@@ -99,6 +128,23 @@ export default function AdminDashboard() {
             </Link>
           </div>
         </motion.div>
+      </div>
+
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-100">
+        <h2 className="text-lg font-semibold text-neutral-900 mb-4 flex items-center gap-2">
+          <Activity className="w-5 h-5 text-indigo-600" />
+          Recent Activity
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {audits.slice(0, 6).map((audit) => (
+            <div key={audit.id} className="rounded-xl border border-neutral-100 bg-neutral-50 p-3">
+              <p className="text-sm font-semibold text-neutral-900 capitalize">{audit.actor} {audit.action}</p>
+              <p className="text-xs text-neutral-500 mt-1">{audit.entityType}{audit.entityRef ? `: ${audit.entityRef}` : ""}</p>
+              <p className="text-xs text-neutral-400 mt-2">{audit.createdAt}</p>
+            </div>
+          ))}
+          {audits.length === 0 && <p className="text-sm text-neutral-500">No activity recorded yet.</p>}
+        </div>
       </div>
     </div>
   );

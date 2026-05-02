@@ -12,6 +12,7 @@ export default function LaundryBaskets() {
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({
     basketCode: "",
@@ -83,6 +84,7 @@ export default function LaundryBaskets() {
       setBaskets((current) => editingId ? current.map((item) => item.id === editingId ? basket : item) : [basket, ...current]);
       resetForm();
       setIsAdding(false);
+      setMessage(editingId ? "Basket updated." : "Basket added.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to add basket.");
     } finally {
@@ -96,6 +98,7 @@ export default function LaundryBaskets() {
     try {
       await api.deleteLaundryBasket(basket.id);
       setBaskets((current) => current.filter((item) => item.id !== basket.id));
+      setMessage(`Basket #${basket.basketCode} deleted.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to delete basket.");
     }
@@ -113,6 +116,7 @@ export default function LaundryBaskets() {
         staffName: "Laundry Staff",
       });
       setBaskets((current) => current.map((item) => item.id === basket.id ? updated : item));
+      setMessage(`Basket #${basket.basketCode} approved.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to approve basket.");
     }
@@ -135,6 +139,8 @@ export default function LaundryBaskets() {
           </Button>
         </div>
       </div>
+
+      {message && <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-medium text-green-800">{message}</div>}
 
       {isAdding && (
         <motion.form
@@ -273,7 +279,36 @@ export default function LaundryBaskets() {
           </div>
         </div>
         
-        <div className="overflow-x-auto">
+        <div className="grid grid-cols-1 gap-3 p-4 md:hidden">
+          {filteredBaskets.map((basket) => (
+            <div key={basket.id} className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-neutral-900 font-mono">#{basket.basketCode}</p>
+                  <p className="text-sm text-neutral-500 font-mono">{basket.studentId}</p>
+                </div>
+                <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                  basket.status === 'Ready' ? 'bg-green-100 text-green-800' :
+                  basket.status === 'Washing' ? 'bg-indigo-100 text-indigo-800' :
+                  basket.status === 'Pending' || basket.status === 'Pending Approval' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-neutral-100 text-neutral-800'
+                }`}>
+                  {basket.status}
+                </span>
+              </div>
+              <p className="text-sm text-neutral-500 mt-3">{basket.receivedAt}</p>
+              {basket.notes && <p className="text-sm text-neutral-600 mt-2">{basket.notes}</p>}
+              <div className="flex flex-wrap gap-2 mt-4">
+                {basket.status === "Pending Approval" && <Button size="sm" onClick={() => approveBasket(basket)} className="bg-green-600 hover:bg-green-700 text-white">Approve</Button>}
+                <Button size="sm" variant="outline" onClick={() => startEdit(basket)}>Edit</Button>
+                <Button size="sm" variant="destructive" onClick={() => handleDeleteBasket(basket)}>Delete</Button>
+              </div>
+            </div>
+          ))}
+          {filteredBaskets.length === 0 && <p className="text-sm text-neutral-500 text-center py-8">No baskets match your search.</p>}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="min-w-full divide-y divide-neutral-200">
             <thead className="bg-neutral-50">
               <tr>

@@ -267,7 +267,32 @@ export default function AdminStudents() {
           </select>
         </div>
         
-        <div className="overflow-x-auto">
+        <div className="grid grid-cols-1 gap-3 p-4 md:hidden">
+          {filteredStudents.map((student) => (
+            <div key={student.id} className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-neutral-900">{student.name}</p>
+                  <p className="text-sm text-neutral-500 font-mono">{student.studentId}</p>
+                </div>
+                <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                  student.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}>
+                  {student.status}
+                </span>
+              </div>
+              <p className="text-sm text-neutral-500 mt-3">{student.email}</p>
+              <p className="text-sm text-neutral-500">{student.room ? `${student.hostel}, ${student.room}` : student.hostel}</p>
+              <div className="flex gap-2 mt-4">
+                <Button size="sm" variant="outline" onClick={() => startEdit(student)}>Edit</Button>
+                <Button size="sm" variant="destructive" onClick={() => handleDeleteStudent(student)}>Delete</Button>
+              </div>
+            </div>
+          ))}
+          {filteredStudents.length === 0 && <p className="text-sm text-neutral-500 text-center py-8">No students match your search.</p>}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="min-w-full divide-y divide-neutral-200">
             <thead className="bg-neutral-50">
               <tr>

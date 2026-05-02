@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { IdCard, ScanLine, CheckCircle2, XCircle } from "lucide-react";
+import { IdCard, ScanLine, CheckCircle2, XCircle, UserRound, Building2, BookOpen } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
-import { api, type Meal } from "@/src/lib/api";
+import { api, type Meal, type Student } from "@/src/lib/api";
 
 export default function KitchenScanner() {
   const [scanStatus, setScanStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -11,6 +11,8 @@ export default function KitchenScanner() {
   const [studentId, setStudentId] = useState("240011223");
   const [meals, setMeals] = useState<Meal[]>([]);
   const [mealId, setMealId] = useState(2);
+  const [student, setStudent] = useState<Student | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
 
   useEffect(() => {
     api.meals().then((items) => {
@@ -27,16 +29,21 @@ export default function KitchenScanner() {
       return;
     }
 
+    setIsScanning(true);
+    setStudent(null);
     try {
       const result = await api.scanMeal(mealId, studentId.trim());
+      setStudent(result.student);
       setScanMessage(`${result.meal.type} approved for Student ID: ${result.studentId}`);
       setScanStatus("success");
     } catch (err) {
       setScanMessage(err instanceof Error ? err.message : "Scan denied.");
       setScanStatus("error");
+    } finally {
+      setIsScanning(false);
     }
 
-    setTimeout(() => setScanStatus('idle'), 3000);
+    setTimeout(() => setScanStatus('idle'), 5000);
   };
 
   return (
@@ -90,8 +97,8 @@ export default function KitchenScanner() {
               </label>
             </div>
             <div className="flex justify-center">
-              <Button onClick={simulateScan} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-                Verify Student Meal
+              <Button onClick={simulateScan} disabled={isScanning} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                {isScanning ? "Checking..." : "Verify Student Meal"}
               </Button>
             </div>
           </div>
@@ -106,6 +113,27 @@ export default function KitchenScanner() {
             <CheckCircle2 className="w-10 h-10 text-green-500 mb-2" />
             <p className="font-bold text-green-800 text-lg">Meal Approved</p>
             <p className="text-sm text-green-600">{scanMessage}</p>
+            {student && (
+              <div className="mt-4 grid grid-cols-1 gap-2 w-full text-left">
+                <div className="flex items-center gap-3 rounded-lg bg-white/70 p-3">
+                  <UserRound className="w-5 h-5 text-green-600" />
+                  <div>
+                    <p className="text-sm font-semibold text-neutral-900">{student.name}</p>
+                    <p className="text-xs text-neutral-500 font-mono">{student.studentId}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg bg-white/70 p-3">
+                    <Building2 className="w-4 h-4 text-neutral-400 mb-1" />
+                    <p className="text-xs text-neutral-600">{student.room ? `${student.hostel}, ${student.room}` : student.hostel}</p>
+                  </div>
+                  <div className="rounded-lg bg-white/70 p-3">
+                    <BookOpen className="w-4 h-4 text-neutral-400 mb-1" />
+                    <p className="text-xs text-neutral-600">{student.course}</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
 

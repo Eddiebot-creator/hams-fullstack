@@ -3,7 +3,7 @@ import {
   Home, QrCode, Shirt, User, 
   ScanLine, UtensilsCrossed, 
   Package, FileText, 
-  Users, BarChart3, LogOut, Bell, ShieldCheck
+  Users, BarChart3, LogOut, Bell, ShieldCheck, Columns3
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, type Notification } from "@/src/lib/api";
@@ -13,18 +13,22 @@ const navConfig = {
     { name: "Dashboard", path: "/student", icon: Home },
     { name: "My QR", path: "/student/qr", icon: QrCode },
     { name: "Laundry", path: "/student/laundry", icon: Shirt },
+    { name: "Updates", path: "/student/notifications", icon: Bell },
     { name: "Profile", path: "/student/profile", icon: User },
   ],
   kitchen: [
     { name: "Dashboard", path: "/kitchen", icon: Home },
     { name: "Scanner", path: "/kitchen/scanner", icon: ScanLine },
+    { name: "Updates", path: "/kitchen/notifications", icon: Bell },
     { name: "Account", path: "/kitchen/account", icon: User },
   ],
   laundry: [
     { name: "Dashboard", path: "/laundry-staff", icon: Home },
     { name: "Baskets", path: "/laundry-staff/baskets", icon: Package },
+    { name: "Board", path: "/laundry-staff/board", icon: Columns3 },
     { name: "Reports", path: "/laundry-staff/reports", icon: FileText },
     { name: "Scanner", path: "/laundry-staff/scanner", icon: ScanLine },
+    { name: "Updates", path: "/laundry-staff/notifications", icon: Bell },
     { name: "Account", path: "/laundry-staff/account", icon: User },
   ],
   admin: [
@@ -34,6 +38,7 @@ const navConfig = {
     { name: "Staff", path: "/admin/staff", icon: User },
     { name: "Analytics", path: "/admin/analytics", icon: BarChart3 },
     { name: "Audit", path: "/admin/audit", icon: ShieldCheck },
+    { name: "Updates", path: "/admin/notifications", icon: Bell },
     { name: "Account", path: "/admin/account", icon: User },
   ]
 };
@@ -113,10 +118,10 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
             <span className="ml-2 font-bold text-lg text-neutral-900">MyAds</span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="relative text-neutral-500">
+            <button onClick={() => navigate(role === "laundry" ? "/laundry-staff/notifications" : `/${role}/notifications`)} className="relative text-neutral-500 rounded-lg p-1 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-indigo-600" />}
-            </div>
+            </button>
           <button onClick={signOut} className="text-neutral-500 hover:text-red-600 rounded-lg p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
             <LogOut className="h-5 w-5" />
           </button>
