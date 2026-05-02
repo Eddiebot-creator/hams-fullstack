@@ -1029,6 +1029,8 @@ def create_app():
             "system_alerts",
             "analytics_meal_trends",
             "analytics_kpis",
+            "notifications",
+            "audit_logs",
         ]
         return jsonify({table: table_count_value(table) for table in tables})
 
@@ -1092,6 +1094,7 @@ def create_app():
                     """,
                     (student_id, meal["type"], "Now", "Denied (Already Scanned)"),
                 )
+                log_action(conn, "kitchen", "denied duplicate scan", "meal", f"{student_id}:{meal['type']}")
                 conn.commit()
             return jsonify({"message": f"Already scanned for {meal['type']}."}), 409
 
@@ -1104,6 +1107,8 @@ def create_app():
                 """,
                 (student_id, meal["type"], "Now", "Success"),
             )
+            create_notification(conn, "student", "Meal approved", f"Your {meal['type']} scan was approved.", student_id)
+            log_action(conn, "kitchen", "approved scan", "meal", f"{student_id}:{meal['type']}")
             conn.commit()
 
         return jsonify({"message": "Meal approved.", "studentId": student_id, "meal": meal}), 201

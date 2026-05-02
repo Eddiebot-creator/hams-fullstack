@@ -116,6 +116,22 @@ export type KitchenDashboard = {
   }>;
 };
 
+export type LaundryDashboard = {
+  statusCounts: {
+    pending: number;
+    washing: number;
+    ready: number;
+    issues: number;
+  };
+  activity: Array<{
+    id: number;
+    basketCode: string;
+    action: string;
+    staffName: string;
+    activityTime: string;
+  }>;
+};
+
 export type LaundryReports = {
   reports: Array<{
     id: number;
@@ -225,6 +241,7 @@ export const api = {
     }),
   adminDashboard: () => request<AdminDashboard>("/admin/dashboard"),
   kitchenDashboard: () => request<KitchenDashboard>("/kitchen/dashboard"),
+  laundryDashboard: () => request<LaundryDashboard>("/laundry/dashboard"),
   laundryReports: () => request<LaundryReports>("/laundry/reports"),
   requestLaundry: (studentId: string, payload: { basketCode?: string; receivedAt?: string; estimatedFinish?: string; notes?: string }) =>
     request<LaundryBasket>(`/student/${studentId}/laundry-request`, {

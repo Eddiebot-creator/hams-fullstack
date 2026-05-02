@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { UtensilsCrossed, Users, CheckCircle2, Clock } from "lucide-react";
+import { UtensilsCrossed, Users, CheckCircle2, Clock, UserRound } from "lucide-react";
 import { api, type KitchenDashboard as KitchenDashboardData } from "@/src/lib/api";
 
 export default function KitchenDashboard() {
   const [dashboard, setDashboard] = useState<KitchenDashboardData | null>(null);
+  const [staffName, setStaffName] = useState("Kitchen Staff");
 
   useEffect(() => {
+    const storedUser = JSON.parse(localStorage.getItem("hamsUser") || "{}");
+    setStaffName(storedUser.name || "Kitchen Staff");
     api.kitchenDashboard().then(setDashboard).catch(console.error);
   }, []);
 
@@ -18,7 +21,10 @@ export default function KitchenDashboard() {
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-neutral-900">Kitchen Dashboard</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-900">Kitchen Dashboard</h1>
+          <p className="text-sm text-neutral-500 mt-1">Signed in as {staffName}</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -104,6 +110,17 @@ export default function KitchenDashboard() {
             </div>
           </div>
         </motion.div>
+      </div>
+
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-neutral-100 flex items-center gap-4">
+        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+          <UserRound className="w-6 h-6 text-green-600" />
+        </div>
+        <div>
+          <p className="text-xs text-neutral-500 uppercase tracking-wider">My workspace</p>
+          <p className="font-semibold text-neutral-900">{staffName}</p>
+          <p className="text-sm text-neutral-500">Meal approvals and denied scans are stored in the backend scan history.</p>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden mt-8">
