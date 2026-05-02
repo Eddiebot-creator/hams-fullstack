@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { User, Mail, Phone, Building, ShieldCheck, Bell } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
+import { PasswordInput } from "@/src/components/ui/password-input";
 import { api, type Notification, type Student } from "@/src/lib/api";
 
 export default function Profile() {
@@ -150,8 +151,8 @@ export default function Profile() {
           <p className="text-sm text-neutral-500">Use at least 6 characters for the new password.</p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input required type="password" placeholder="Current password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })} />
-          <Input required type="password" placeholder="New password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })} />
+          <PasswordInput required placeholder="Current password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })} />
+          <PasswordInput required placeholder="New password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })} />
         </div>
         <Button type="submit" variant="outline">Update Password</Button>
       </form>

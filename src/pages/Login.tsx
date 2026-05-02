@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
+import { PasswordInput } from "@/src/components/ui/password-input";
 import { Label } from "@/src/components/ui/label";
 import { ArrowRight, Lock, Mail, ShieldAlert, Shirt, User, UtensilsCrossed } from "lucide-react";
 import { api, type Role } from "@/src/lib/api";
@@ -163,10 +164,9 @@ export default function Login() {
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Lock className="h-5 w-5 text-neutral-400" />
                   </div>
-                  <Input
+                  <PasswordInput
                     id="password"
                     name="password"
-                    type="password"
                     required
                     className="pl-10 block w-full border-neutral-200 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg bg-neutral-50"
                     value="password"
