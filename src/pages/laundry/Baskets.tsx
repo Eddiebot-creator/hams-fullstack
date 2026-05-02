@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
-import { CalendarClock, ClipboardList, Edit2, IdCard, PackagePlus, Search, Filter, StickyNote, Trash2, UserRound } from "lucide-react";
+import { CalendarClock, ClipboardList, Download, Edit2, IdCard, PackagePlus, Search, Filter, StickyNote, Trash2, UserRound } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type LaundryBasket } from "@/src/lib/api";
@@ -99,10 +99,18 @@ export default function LaundryBaskets() {
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-neutral-900">Manage Baskets</h1>
-        <Button onClick={() => setIsAdding((value) => !value)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-          <PackagePlus className="w-4 h-4 mr-2" />
-          Add Basket
-        </Button>
+        <div className="flex items-center gap-3">
+          <a href={api.exportUrl("baskets")} download>
+            <Button variant="outline">
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+          </a>
+          <Button onClick={() => setIsAdding((value) => !value)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+            <PackagePlus className="w-4 h-4 mr-2" />
+            Add Basket
+          </Button>
+        </div>
       </div>
 
       {isAdding && (

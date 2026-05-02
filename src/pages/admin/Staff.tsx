@@ -1,0 +1,90 @@
+import { useEffect, useState, type FormEvent } from "react";
+import { motion } from "motion/react";
+import { Mail, ShieldCheck, UserPlus } from "lucide-react";
+import { Button } from "@/src/components/ui/button";
+import { Input } from "@/src/components/ui/input";
+import { api, type StaffUser } from "@/src/lib/api";
+
+export default function AdminStaff() {
+  const [staff, setStaff] = useState<StaffUser[]>([]);
+  const [isAdding, setIsAdding] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [form, setForm] = useState({ name: "", email: "", role: "kitchen" as "kitchen" | "laundry" | "admin", status: "Active" });
+
+  useEffect(() => {
+    api.staff().then(setStaff).catch(console.error);
+  }, []);
+
+  const saveStaff = async (event: FormEvent) => {
+    event.preventDefault();
+    setIsSaving(true);
+    setMessage("");
+    try {
+      const created = await api.createStaff(form);
+      setStaff((current) => [...current, created]);
+      setForm({ name: "", email: "", role: "kitchen", status: "Active" });
+      setIsAdding(false);
+      setMessage("Staff account created.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Unable to create staff account.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-neutral-900">Manage Staff</h1>
+        <Button onClick={() => setIsAdding((value) => !value)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+          <UserPlus className="w-4 h-4 mr-2" />
+          Add Staff
+        </Button>
+      </div>
+
+      {message && <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-800">{message}</div>}
+
+      {isAdding && (
+        <motion.form initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} onSubmit={saveStaff} className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+          <div className="border-b border-neutral-100 bg-neutral-50 px-6 py-4">
+            <h2 className="text-base font-semibold text-neutral-900">New staff account</h2>
+            <p className="text-sm text-neutral-500">Default password is password.</p>
+          </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-5">
+            <Input required placeholder="Full name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+            <Input required type="email" placeholder="Email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+            <select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as "kitchen" | "laundry" | "admin" })} className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+              <option value="kitchen">Kitchen</option>
+              <option value="laundry">Laundry</option>
+              <option value="admin">Admin</option>
+            </select>
+            <select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })} className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+          <div className="px-6 py-4 border-t border-neutral-100 bg-neutral-50 flex justify-end gap-3">
+            <Button type="button" variant="outline" onClick={() => setIsAdding(false)}>Cancel</Button>
+            <Button type="submit" disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 text-white">{isSaving ? "Saving..." : "Save Staff"}</Button>
+          </div>
+        </motion.form>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {staff.map((member) => (
+          <div key={member.id} className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="font-semibold text-neutral-900">{member.name}</p>
+                <p className="text-sm text-neutral-500 flex items-center gap-2 mt-2"><Mail className="w-4 h-4" />{member.email}</p>
+              </div>
+              <span className="rounded-full bg-indigo-50 text-indigo-700 px-3 py-1 text-xs font-semibold capitalize">{member.role}</span>
+            </div>
+            <p className="mt-4 text-sm text-neutral-600 flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-green-600" />{member.status}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { UtensilsCrossed, Shirt, Clock } from "lucide-react";
+import { UtensilsCrossed, Shirt, Clock, PackagePlus } from "lucide-react";
+import { Button } from "@/src/components/ui/button";
+import { Input } from "@/src/components/ui/input";
 import { api, type StudentOverview } from "@/src/lib/api";
 
 export default function Dashboard() {
   const [overview, setOverview] = useState<StudentOverview | null>(null);
+  const [requestNote, setRequestNote] = useState("");
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("hamsUser") || "{}");
@@ -15,6 +19,23 @@ export default function Dashboard() {
   const meals = overview?.meals ?? [];
   const remainingMeals = meals.filter((meal) => !meal.consumed).length;
   const currentLaundry = overview?.laundry[0];
+  const studentId = overview?.student.studentId ?? "240011223";
+
+  const requestLaundry = async () => {
+    setMessage("");
+    try {
+      const basket = await api.requestLaundry(studentId, {
+        basketCode: `REQ${Date.now().toString().slice(-5)}`,
+        receivedAt: "Requested now",
+        notes: requestNote || "Student laundry request",
+      });
+      setOverview((current) => current ? { ...current, laundry: [basket, ...current.laundry] } : current);
+      setRequestNote("");
+      setMessage("Laundry request sent.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Unable to send laundry request.");
+    }
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
@@ -100,6 +121,16 @@ export default function Dashboard() {
                 <span className="text-neutral-400">Mon, 2:30 PM</span>
               </div>
             </div>
+          </div>
+
+          <div className="mt-6 rounded-xl border border-neutral-100 bg-neutral-50 p-4 space-y-3">
+            <h4 className="text-sm font-semibold text-neutral-900 flex items-center">
+              <PackagePlus className="w-4 h-4 mr-2 text-indigo-600" />
+              Request laundry drop-off
+            </h4>
+            <Input placeholder="Optional note for laundry staff" value={requestNote} onChange={(event) => setRequestNote(event.target.value)} />
+            <Button onClick={requestLaundry} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">Send Request</Button>
+            {message && <p className="text-sm font-medium text-indigo-700">{message}</p>}
           </div>
         </motion.div>
       </div>

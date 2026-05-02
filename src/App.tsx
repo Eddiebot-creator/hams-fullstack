@@ -28,6 +28,12 @@ import AdminDashboard from "./pages/admin/Dashboard";
 import AdminMeals from "./pages/admin/Meals";
 import AdminStudents from "./pages/admin/Students";
 import AdminAnalytics from "./pages/admin/Analytics";
+import AdminStaff from "./pages/admin/Staff";
+
+function ProtectedLayout({ role }: { role: "student" | "kitchen" | "laundry" | "admin" }) {
+  const user = JSON.parse(localStorage.getItem("hamsUser") || "{}");
+  return user.role === role ? <Layout role={role} /> : <Navigate to="/login" replace />;
+}
 
 export default function App() {
   return (
@@ -36,7 +42,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         
         {/* Student Routes */}
-        <Route path="/student" element={<Layout role="student" />}>
+        <Route path="/student" element={<ProtectedLayout role="student" />}>
           <Route index element={<StudentDashboard />} />
           <Route path="qr" element={<StudentQR />} />
           <Route path="laundry" element={<StudentLaundry />} />
@@ -44,13 +50,13 @@ export default function App() {
         </Route>
 
         {/* Kitchen Routes */}
-        <Route path="/kitchen" element={<Layout role="kitchen" />}>
+        <Route path="/kitchen" element={<ProtectedLayout role="kitchen" />}>
           <Route index element={<KitchenDashboard />} />
           <Route path="scanner" element={<KitchenScanner />} />
         </Route>
 
         {/* Laundry Staff Routes */}
-        <Route path="/laundry-staff" element={<Layout role="laundry" />}>
+        <Route path="/laundry-staff" element={<ProtectedLayout role="laundry" />}>
           <Route index element={<LaundryDashboard />} />
           <Route path="baskets" element={<LaundryBaskets />} />
           <Route path="reports" element={<LaundryReports />} />
@@ -58,10 +64,11 @@ export default function App() {
         </Route>
 
         {/* Admin Routes */}
-        <Route path="/admin" element={<Layout role="admin" />}>
+        <Route path="/admin" element={<ProtectedLayout role="admin" />}>
           <Route index element={<AdminDashboard />} />
           <Route path="meals" element={<AdminMeals />} />
           <Route path="students" element={<AdminStudents />} />
+          <Route path="staff" element={<AdminStaff />} />
           <Route path="analytics" element={<AdminAnalytics />} />
         </Route>
 

@@ -3,8 +3,10 @@ import {
   Home, QrCode, Shirt, User, 
   ScanLine, UtensilsCrossed, 
   Package, FileText, 
-  Users, BarChart3, LogOut
+  Users, BarChart3, LogOut, Bell
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { api, type Notification } from "@/src/lib/api";
 
 const navConfig = {
   student: [
@@ -27,6 +29,7 @@ const navConfig = {
     { name: "Dashboard", path: "/admin", icon: Home },
     { name: "Meals", path: "/admin/meals", icon: UtensilsCrossed },
     { name: "Students", path: "/admin/students", icon: Users },
+    { name: "Staff", path: "/admin/staff", icon: User },
     { name: "Analytics", path: "/admin/analytics", icon: BarChart3 },
   ]
 };
@@ -35,6 +38,17 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
   const navigate = useNavigate();
   const location = useLocation();
   const navItems = navConfig[role];
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem("hamsUser") || "{}");
+    api.notifications(role, user.studentId).then(setNotifications).catch(() => setNotifications([]));
+  }, [role]);
+
+  const signOut = () => {
+    localStorage.removeItem("hamsUser");
+    navigate("/login");
+  };
 
   return (
     <div className="min-h-screen bg-neutral-50 flex flex-col md:flex-row">
@@ -74,7 +88,7 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
         </nav>
         <div className="p-4 border-t border-neutral-200">
           <button 
-            onClick={() => navigate('/login')}
+            onClick={signOut}
             className="w-full flex items-center px-3 py-2.5 text-sm font-medium text-red-600 rounded-lg hover:bg-red-50 transition-colors"
           >
             <LogOut className="mr-3 h-5 w-5 text-red-500" />
@@ -93,9 +107,15 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
             </div>
             <span className="ml-2 font-bold text-lg text-neutral-900">MyAds</span>
           </div>
-          <button onClick={() => navigate('/login')} className="text-neutral-500 hover:text-red-600">
+          <div className="flex items-center gap-3">
+            <div className="relative text-neutral-500">
+              <Bell className="h-5 w-5" />
+              {notifications.length > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-indigo-600" />}
+            </div>
+          <button onClick={signOut} className="text-neutral-500 hover:text-red-600">
             <LogOut className="h-5 w-5" />
           </button>
+          </div>
         </header>
 
         <div className="flex-1 overflow-auto">

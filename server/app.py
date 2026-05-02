@@ -2,7 +2,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
@@ -129,6 +129,25 @@ def init_db():
               value TEXT NOT NULL,
               delta TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS notifications (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_role TEXT NOT NULL,
+              student_id TEXT,
+              title TEXT NOT NULL,
+              message TEXT NOT NULL,
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              is_read INTEGER NOT NULL DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS audit_logs (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              actor TEXT NOT NULL,
+              action TEXT NOT NULL,
+              entity_type TEXT NOT NULL,
+              entity_ref TEXT,
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
 
@@ -195,6 +214,23 @@ def table_count(conn, table_name):
 def table_count_value(table_name):
     with get_connection() as conn:
         return table_count(conn, table_name)
+
+
+def log_action(conn, actor, action, entity_type, entity_ref=None):
+    conn.execute(
+        "INSERT INTO audit_logs (actor, action, entity_type, entity_ref) VALUES (?, ?, ?, ?)",
+        (actor, action, entity_type, entity_ref),
+    )
+
+
+def create_notification(conn, user_role, title, message, student_id=None):
+    conn.execute(
+        """
+        INSERT INTO notifications (user_role, student_id, title, message)
+        VALUES (?, ?, ?, ?)
+        """,
+        (user_role, student_id, title, message),
+    )
 
 
 def seed_supporting_tables(conn):
@@ -296,6 +332,19 @@ def seed_supporting_tables(conn):
                 ("Average Meal Scan Time", "1.2s", "-0.3s"),
                 ("Laundry Turnaround Time", "22.5h", "-1.5h"),
                 ("Active Students", "98.5%", "+0.5%"),
+            ],
+        )
+
+    if table_count(conn, "notifications") == 0:
+        conn.executemany(
+            """
+            INSERT INTO notifications (user_role, student_id, title, message)
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                ("student", "240011223", "Laundry in progress", "Basket #1042 is currently washing."),
+                ("admin", None, "System ready", "HAMS backend and database are online."),
+                ("laundry", None, "Pending baskets", "There are baskets waiting for laundry processing."),
             ],
         )
 
@@ -414,6 +463,53 @@ def create_app():
         )
         return jsonify(student), 201
 
+    @app.get("/api/staff")
+    def staff():
+        rows = query_all(
+            """
+            SELECT id, name, email, role, status
+            FROM users
+            WHERE role IN ('kitchen', 'laundry', 'admin')
+            ORDER BY role, name
+            """
+        )
+        return jsonify(rows)
+
+    @app.post("/api/staff")
+    def create_staff():
+        payload = request.get_json(silent=True) or {}
+        required_fields = ["name", "email", "role"]
+        missing_fields = [field for field in required_fields if not payload.get(field)]
+
+        if missing_fields:
+            return jsonify({"message": f"Missing required fields: {', '.join(missing_fields)}."}), 400
+        if payload["role"] not in ["kitchen", "laundry", "admin"]:
+            return jsonify({"message": "Staff role must be kitchen, laundry, or admin."}), 400
+
+        try:
+            with get_connection() as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO users (name, email, password, role, status)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        payload["name"],
+                        payload["email"],
+                        generate_password_hash(payload.get("password", "password")),
+                        payload["role"],
+                        payload.get("status", "Active"),
+                    ),
+                )
+                log_action(conn, "admin", "created", "staff", payload["email"])
+                conn.commit()
+                staff_id = cursor.lastrowid
+        except sqlite3.IntegrityError:
+            return jsonify({"message": "A staff account with that email already exists."}), 409
+
+        row = query_one("SELECT id, name, email, role, status FROM users WHERE id = ?", (staff_id,))
+        return jsonify(row), 201
+
     @app.put("/api/students/<int:user_id>")
     def update_student(user_id):
         payload = request.get_json(silent=True) or {}
@@ -443,6 +539,7 @@ def create_app():
                         user_id,
                     ),
                 )
+                log_action(conn, "admin", "updated", "student", payload["studentId"])
                 conn.commit()
         except sqlite3.IntegrityError:
             return jsonify({"message": "A student with that email or student ID already exists."}), 409
@@ -471,6 +568,7 @@ def create_app():
             conn.execute("DELETE FROM meal_scans WHERE student_id = ?", (student_id,))
             conn.execute("DELETE FROM laundry_baskets WHERE student_id = ?", (student_id,))
             conn.execute("DELETE FROM users WHERE id = ? AND role = 'student'", (user_id,))
+            log_action(conn, "admin", "deleted", "student", student_id)
             conn.commit()
 
         return jsonify({"message": "Student deleted."})
@@ -501,6 +599,7 @@ def create_app():
                 "INSERT INTO meals (type, start_time, end_time, menu, status) VALUES (?, ?, ?, ?, ?)",
                 (payload["type"], payload["startTime"], payload["endTime"], payload["menu"], payload["status"]),
             )
+            log_action(conn, "admin", "created", "meal", payload["type"])
             conn.commit()
             meal_id = cursor.lastrowid
 
@@ -528,6 +627,7 @@ def create_app():
                 """,
                 (payload["type"], payload["startTime"], payload["endTime"], payload["menu"], payload["status"], meal_id),
             )
+            log_action(conn, "admin", "updated", "meal", payload["type"])
             conn.commit()
 
         if result.rowcount == 0:
@@ -544,6 +644,7 @@ def create_app():
         with get_connection() as conn:
             conn.execute("DELETE FROM meal_scans WHERE meal_id = ?", (meal_id,))
             result = conn.execute("DELETE FROM meals WHERE id = ?", (meal_id,))
+            log_action(conn, "admin", "deleted", "meal", str(meal_id))
             conn.commit()
 
         if result.rowcount == 0:
@@ -601,6 +702,14 @@ def create_app():
                         payload["receivedAt"],
                     ),
                 )
+                create_notification(
+                    conn,
+                    "student",
+                    "Laundry received",
+                    f"Basket #{payload['basketCode']} has been received by laundry.",
+                    payload["studentId"],
+                )
+                log_action(conn, "laundry", "created", "basket", payload["basketCode"])
                 conn.commit()
                 basket_id = cursor.lastrowid
         except sqlite3.IntegrityError:
@@ -656,6 +765,14 @@ def create_app():
                         payload["receivedAt"],
                     ),
                 )
+                create_notification(
+                    conn,
+                    "student",
+                    "Laundry status updated",
+                    f"Basket #{payload['basketCode']} is now {payload['status']}.",
+                    payload["studentId"],
+                )
+                log_action(conn, "laundry", "updated", "basket", payload["basketCode"])
                 conn.commit()
         except sqlite3.IntegrityError:
             return jsonify({"message": "A basket with that basket ID already exists."}), 409
@@ -678,12 +795,111 @@ def create_app():
     def delete_laundry_basket(basket_id):
         with get_connection() as conn:
             result = conn.execute("DELETE FROM laundry_baskets WHERE id = ?", (basket_id,))
+            log_action(conn, "laundry", "deleted", "basket", str(basket_id))
             conn.commit()
 
         if result.rowcount == 0:
             return jsonify({"message": "Basket not found."}), 404
 
         return jsonify({"message": "Basket deleted."})
+
+    @app.post("/api/student/<student_id>/laundry-request")
+    def request_laundry(student_id):
+        payload = request.get_json(silent=True) or {}
+        basket_code = payload.get("basketCode") or f"REQ{student_id[-4:]}"
+        received_at = payload.get("receivedAt", "Requested now")
+
+        try:
+            with get_connection() as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO laundry_baskets (basket_code, student_id, status, received_at, estimated_finish, notes)
+                    VALUES (?, ?, 'Pending', ?, ?, ?)
+                    """,
+                    (basket_code, student_id, received_at, payload.get("estimatedFinish"), payload.get("notes", "Student laundry request")),
+                )
+                conn.execute(
+                    "INSERT INTO laundry_activity (basket_code, action, staff_name, activity_time) VALUES (?, 'Student Request', ?, ?)",
+                    (basket_code, "Student", received_at),
+                )
+                create_notification(conn, "laundry", "New student laundry request", f"Student {student_id} requested basket #{basket_code}.")
+                log_action(conn, "student", "requested", "basket", basket_code)
+                conn.commit()
+                basket_id = cursor.lastrowid
+        except sqlite3.IntegrityError:
+            return jsonify({"message": "That basket ID already exists."}), 409
+
+        basket = query_one(
+            """
+            SELECT id, basket_code AS basketCode, student_id AS studentId, status,
+                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+            FROM laundry_baskets WHERE id = ?
+            """,
+            (basket_id,),
+        )
+        return jsonify(basket), 201
+
+    @app.get("/api/notifications")
+    def notifications():
+        role = request.args.get("role", "")
+        student_id = request.args.get("studentId")
+        if student_id:
+            rows = query_all(
+                """
+                SELECT id, user_role AS userRole, student_id AS studentId, title, message, created_at AS createdAt, is_read AS isRead
+                FROM notifications
+                WHERE user_role = ? AND student_id = ?
+                ORDER BY id DESC
+                LIMIT 10
+                """,
+                (role, student_id),
+            )
+        else:
+            rows = query_all(
+                """
+                SELECT id, user_role AS userRole, student_id AS studentId, title, message, created_at AS createdAt, is_read AS isRead
+                FROM notifications
+                WHERE user_role = ?
+                ORDER BY id DESC
+                LIMIT 10
+                """,
+                (role,),
+            )
+        return jsonify(rows)
+
+    @app.get("/api/audit-logs")
+    def audit_logs():
+        rows = query_all(
+            """
+            SELECT id, actor, action, entity_type AS entityType, entity_ref AS entityRef, created_at AS createdAt
+            FROM audit_logs
+            ORDER BY id DESC
+            LIMIT 50
+            """
+        )
+        return jsonify(rows)
+
+    @app.get("/api/export/<kind>")
+    def export_csv(kind):
+        export_map = {
+            "students": ("students.csv", ["name", "studentId", "email", "hostel", "status"], query_all("SELECT name, student_id AS studentId, email, hostel, status FROM users WHERE role = 'student' ORDER BY name")),
+            "meals": ("meals.csv", ["type", "startTime", "endTime", "menu", "status"], query_all("SELECT type, start_time AS startTime, end_time AS endTime, menu, status FROM meals ORDER BY id")),
+            "baskets": ("laundry-baskets.csv", ["basketCode", "studentId", "status", "receivedAt"], query_all("SELECT basket_code AS basketCode, student_id AS studentId, status, received_at AS receivedAt FROM laundry_baskets ORDER BY id DESC")),
+            "audits": ("audit-logs.csv", ["actor", "action", "entityType", "entityRef", "createdAt"], query_all("SELECT actor, action, entity_type AS entityType, entity_ref AS entityRef, created_at AS createdAt FROM audit_logs ORDER BY id DESC")),
+        }
+        if kind not in export_map:
+            return jsonify({"message": "Unknown export type."}), 404
+
+        filename, headers, rows = export_map[kind]
+        csv_lines = [",".join(headers)]
+        for row in rows:
+            csv_lines.append(",".join(f'"{str(row.get(header, "")).replace(chr(34), chr(34) + chr(34))}"' for header in headers))
+
+        return Response(
+            "\n".join(csv_lines),
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
 
     @app.get("/api/admin/dashboard")
     def admin_dashboard():

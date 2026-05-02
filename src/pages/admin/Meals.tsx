@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
-import { Clock, Edit2, Plus, Trash2, UtensilsCrossed } from "lucide-react";
+import { Clock, Download, Edit2, Plus, Trash2, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type Meal } from "@/src/lib/api";
@@ -80,10 +80,18 @@ export default function AdminMeals() {
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-neutral-900">Manage Meals</h1>
-        <Button onClick={() => { resetForm(); setIsEditing((value) => !value); }} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Meal
-        </Button>
+        <div className="flex items-center gap-3">
+          <a href={api.exportUrl("meals")} download>
+            <Button variant="outline">
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+          </a>
+          <Button onClick={() => { resetForm(); setIsEditing((value) => !value); }} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Meal
+          </Button>
+        </div>
       </div>
 
       {isEditing && (

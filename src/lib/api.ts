@@ -133,6 +133,39 @@ export type LaundryReports = {
   }>;
 };
 
+export type StaffUser = {
+  id: number;
+  name: string;
+  email: string;
+  role: Role;
+  status: string;
+};
+
+export type Notification = {
+  id: number;
+  userRole: string;
+  studentId: string | null;
+  title: string;
+  message: string;
+  createdAt: string;
+  isRead: 0 | 1;
+};
+
+export type AuditLog = {
+  id: number;
+  actor: string;
+  action: string;
+  entityType: string;
+  entityRef: string | null;
+  createdAt: string;
+};
+
+export type AdminAnalytics = {
+  mealTrends: Array<{ id: number; dayLabel: string; attendanceCount: number }>;
+  machineUtilizationAverage: number;
+  kpis: Array<{ id: number; name: string; value: string; delta: string }>;
+};
+
 export const api = {
   login: (payload: { email: string; password: string; role: Role }) =>
     request<{ user: Student & { role: Role } }>("/auth/login", {
@@ -153,6 +186,12 @@ export const api = {
   deleteStudent: (id: number) =>
     request<{ message: string }>(`/students/${id}`, {
       method: "DELETE",
+    }),
+  staff: () => request<StaffUser[]>("/staff"),
+  createStaff: (payload: { name: string; email: string; role: "kitchen" | "laundry" | "admin"; status?: string; password?: string }) =>
+    request<StaffUser>("/staff", {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
   meals: () => request<Meal[]>("/meals"),
   createMeal: (payload: CreateMealPayload) =>
@@ -187,6 +226,16 @@ export const api = {
   adminDashboard: () => request<AdminDashboard>("/admin/dashboard"),
   kitchenDashboard: () => request<KitchenDashboard>("/kitchen/dashboard"),
   laundryReports: () => request<LaundryReports>("/laundry/reports"),
+  requestLaundry: (studentId: string, payload: { basketCode?: string; receivedAt?: string; estimatedFinish?: string; notes?: string }) =>
+    request<LaundryBasket>(`/student/${studentId}/laundry-request`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  notifications: (role: Role, studentId?: string) =>
+    request<Notification[]>(`/notifications?role=${role}${studentId ? `&studentId=${studentId}` : ""}`),
+  auditLogs: () => request<AuditLog[]>("/audit-logs"),
+  adminAnalytics: () => request<AdminAnalytics>("/admin/analytics"),
+  exportUrl: (kind: "students" | "meals" | "baskets" | "audits") => `${API_BASE_URL}/export/${kind}`,
   studentOverview: (studentId: string) => request<StudentOverview>(`/student/${studentId}/overview`),
   scanMeal: (mealId: number, studentId: string) =>
     request<{ message: string; studentId: string; meal: Meal }>(`/meals/${mealId}/scan`, {
