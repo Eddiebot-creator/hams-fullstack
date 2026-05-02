@@ -3,7 +3,7 @@ import sqlite3
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from flask import Flask, Response, jsonify, request, send_from_directory
+from flask import Flask, Response, g, has_request_context, jsonify, request, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
 
 try:
@@ -101,6 +101,14 @@ def get_connection():
     return DatabaseConnection()
 
 
+def get_request_connection():
+    if not has_request_context():
+        return None
+    if "db_conn" not in g:
+        g.db_conn = get_connection()
+    return g.db_conn
+
+
 def table_columns(conn, table_name):
     if IS_MYSQL:
         rows = conn.execute(f"SHOW COLUMNS FROM {table_name}").fetchall()
@@ -109,14 +117,22 @@ def table_columns(conn, table_name):
 
 
 def query_one(sql, params=()):
-    with get_connection() as conn:
+    conn = get_request_connection()
+    if conn:
         row = conn.execute(sql, params).fetchone()
+    else:
+        with get_connection() as conn:
+            row = conn.execute(sql, params).fetchone()
     return dict(row) if row else None
 
 
 def query_all(sql, params=()):
-    with get_connection() as conn:
+    conn = get_request_connection()
+    if conn:
         rows = conn.execute(sql, params).fetchall()
+    else:
+        with get_connection() as conn:
+            rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
 
 
@@ -321,6 +337,9 @@ def table_count(conn, table_name):
 
 
 def table_count_value(table_name):
+    conn = get_request_connection()
+    if conn:
+        return table_count(conn, table_name)
     with get_connection() as conn:
         return table_count(conn, table_name)
 
@@ -482,6 +501,12 @@ def seed_supporting_tables(conn):
 def create_app():
     app = Flask(__name__, static_folder=None)
     init_db_safely()
+
+    @app.teardown_request
+    def close_request_connection(_error=None):
+        conn = g.pop("db_conn", None)
+        if conn is not None:
+            conn.conn.close()
 
     @app.after_request
     def add_cors_headers(response):
