@@ -10,6 +10,19 @@ type ApiRequestOptions = RequestInit & {
 
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
+function friendlyNetworkError(error: unknown) {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return new Error("The server is taking too long to respond. Please wait a moment and try again.");
+  }
+  if (error instanceof TypeError && error.message.toLowerCase().includes("fetch")) {
+    return new Error("Unable to reach the server. Check your internet connection and try again.");
+  }
+  if (error instanceof Error && error.message.toLowerCase().includes("signal is aborted")) {
+    return new Error("The request timed out before the server replied. Please try again.");
+  }
+  return error;
+}
+
 async function fetchJson<T>(path: string, options: RequestInit, retries: number, timeoutMs: number): Promise<T> {
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     const controller = new AbortController();
@@ -43,7 +56,7 @@ async function fetchJson<T>(path: string, options: RequestInit, retries: number,
       return response.json() as Promise<T>;
     } catch (error) {
       const canRetry = attempt < retries;
-      if (!canRetry) throw error;
+      if (!canRetry) throw friendlyNetworkError(error);
       await wait(350 * (attempt + 1));
     } finally {
       window.clearTimeout(timeout);
@@ -338,6 +351,7 @@ export const api = {
   login: (payload: { email: string; password: string }) =>
     request<{ user: Student & { role: Role }; token: string }>("/auth/login", {
       method: "POST",
+      timeoutMs: 30000,
       body: JSON.stringify(payload),
     }),
   requestPasswordReset: (payload: { email: string }) =>

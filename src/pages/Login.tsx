@@ -47,7 +47,9 @@ export default function Login() {
       showToast(`Welcome, ${user.name}.`);
       navigate(destinations[user.role]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to sign in.");
+      const message = err instanceof Error ? err.message : "Unable to sign in.";
+      setError(message);
+      showToast(message, "error");
     } finally {
       setIsLoading(false);
     }
@@ -189,7 +191,10 @@ export default function Login() {
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Connecting...
+                  </>
                 ) : (
                   <>
                     Sign in
