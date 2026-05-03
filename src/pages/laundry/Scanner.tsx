@@ -39,32 +39,34 @@ export default function LaundryScanner() {
       setStudent(result.student);
       setMessage(result.message);
       setScanStatus("success");
+      navigator.vibrate?.(80);
       showToast(result.message);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Unable to save laundry scan.");
       setScanStatus("error");
+      navigator.vibrate?.([80, 60, 80]);
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-lg mx-auto space-y-6 flex flex-col items-center justify-center min-h-[80vh]">
+    <div className="p-3 sm:p-6 lg:p-8 max-w-lg mx-auto space-y-4 flex flex-col items-center justify-center min-h-[calc(100vh-8rem)]">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-3xl p-8 shadow-xl border border-neutral-100 w-full text-center relative overflow-hidden"
+        className="bg-white rounded-3xl p-5 sm:p-8 shadow-xl border border-neutral-100 w-full text-center relative overflow-hidden"
       >
         <div className="absolute top-0 left-0 w-full h-2 bg-indigo-600"></div>
         
         <h1 className="text-2xl font-bold text-neutral-900 mb-2 mt-4">Laundry Scanner</h1>
         <p className="text-neutral-500 mb-6">Save every laundry scan directly to the database.</p>
 
-        <div className="flex justify-center space-x-2 mb-8">
+        <div className="grid grid-cols-2 gap-2 mb-6">
           <Button 
             variant={actionType === 'receive' ? 'default' : 'outline'} 
             onClick={() => setActionType('receive')}
-            className={`w-32 ${actionType === 'receive' ? 'bg-indigo-600 text-white' : 'text-neutral-600'}`}
+            className={`h-12 ${actionType === 'receive' ? 'bg-indigo-600 text-white' : 'text-neutral-600'}`}
           >
             <Package className="w-4 h-4 mr-2" />
             Receive
@@ -72,7 +74,7 @@ export default function LaundryScanner() {
           <Button
             variant={actionType === 'return' ? 'default' : 'outline'}
             onClick={() => setActionType('return')}
-            className={`w-32 ${actionType === 'return' ? 'bg-indigo-600 text-white' : 'text-neutral-600'}`}
+            className={`h-12 ${actionType === 'return' ? 'bg-indigo-600 text-white' : 'text-neutral-600'}`}
           >
             <Shirt className="w-4 h-4 mr-2" />
             Return
@@ -91,7 +93,7 @@ export default function LaundryScanner() {
           </label>
         </div>
         
-        <div className="relative w-64 h-64 mx-auto mb-8 bg-neutral-900 rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
+        <div className="relative w-full max-w-72 aspect-square mx-auto mb-6 bg-neutral-900 rounded-3xl overflow-hidden shadow-inner flex items-center justify-center">
           <div className="absolute inset-0 border-4 border-indigo-500/30 m-4 rounded-xl pointer-events-none"></div>
           <ScanLine className="w-16 h-16 text-indigo-500/50 animate-pulse" />
           
@@ -103,7 +105,7 @@ export default function LaundryScanner() {
         </div>
 
         <div className="mb-6">
-          <Button onClick={saveScan} disabled={isSaving} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+          <Button onClick={saveScan} disabled={isSaving} className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white">
             <ScanLine className="w-4 h-4" />
             {isSaving ? "Saving scan..." : `Save ${actionType === "receive" ? "Receive" : "Return"} Scan`}
           </Button>

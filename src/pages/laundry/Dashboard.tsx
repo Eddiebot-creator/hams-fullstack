@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { Package, Shirt, CheckCircle2, AlertCircle, UserRound } from "lucide-react";
+import { Package, Shirt, CheckCircle2, AlertCircle, UserRound, ScanLine, Columns3 } from "lucide-react";
+import { Button } from "@/src/components/ui/button";
 import { api, type LaundryDashboard as LaundryDashboardData } from "@/src/lib/api";
 
 export default function LaundryDashboard() {
@@ -33,6 +35,27 @@ export default function LaundryDashboard() {
           <p className="font-semibold text-neutral-900">{staffName}</p>
           <p className="text-sm text-neutral-500">Your basket updates are saved to the database activity history.</p>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Link to="/laundry-staff/scanner">
+          <Button className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white">
+            <ScanLine className="w-4 h-4" />
+            Scanner
+          </Button>
+        </Link>
+        <Link to="/laundry-staff/board">
+          <Button variant="outline" className="w-full h-12">
+            <Columns3 className="w-4 h-4" />
+            Workflow Board
+          </Button>
+        </Link>
+        <Link to="/laundry-staff/issues">
+          <Button variant="outline" className="w-full h-12">
+            <AlertCircle className="w-4 h-4" />
+            Report Issue
+          </Button>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

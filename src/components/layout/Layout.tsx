@@ -8,6 +8,7 @@ import {
 import { useEffect, useState } from "react";
 import { api, type Notification } from "@/src/lib/api";
 import GlobalSearch from "./GlobalSearch";
+import RoleTips from "./RoleTips";
 
 const navConfig = {
   student: [
@@ -139,20 +140,21 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
           </div>
         </header>
 
+        <RoleTips role={role} />
         <div className="flex-1 overflow-auto">
           <Outlet />
         </div>
       </main>
 
       {/* Bottom Navigation (Mobile) */}
-      <nav className="md:hidden fixed bottom-0 w-full bg-white border-t border-neutral-200 flex justify-around items-center h-16 px-2 z-50">
+      <nav className="md:hidden fixed bottom-0 w-full bg-white/95 backdrop-blur border-t border-neutral-200 flex items-center h-16 px-2 z-50 overflow-x-auto">
         {navItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             end={item.path === `/${role}` || item.path === '/laundry-staff'}
             className={({ isActive }) =>
-              `flex flex-col items-center justify-center w-full h-full space-y-1 rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+              `flex flex-col items-center justify-center min-w-20 h-14 space-y-1 rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                 isActive ? "text-indigo-600 bg-indigo-50" : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50"
               }`
             }

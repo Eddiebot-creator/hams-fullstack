@@ -6,6 +6,7 @@ import { Input } from "@/src/components/ui/input";
 import { api, type Meal } from "@/src/lib/api";
 import { CardSkeleton } from "@/src/components/ui/skeleton";
 import { showToast } from "@/src/components/ui/toast";
+import { ConfirmDialog } from "@/src/components/ui/confirm-dialog";
 
 const emptyForm = {
   type: "",
@@ -23,6 +24,7 @@ export default function AdminMeals() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [mealToDelete, setMealToDelete] = useState<Meal | null>(null);
   const [error, setError] = useState("");
   const [form, setForm] = useState(emptyForm);
 
@@ -81,11 +83,10 @@ export default function AdminMeals() {
   };
 
   const handleDeleteMeal = async (meal: Meal) => {
-    if (!window.confirm(`Delete ${meal.type}? This also removes its scan records.`)) return;
-
     try {
       await api.deleteMeal(meal.id);
       setMeals((current) => current.filter((item) => item.id !== meal.id));
+      setMealToDelete(null);
       showToast("Meal deleted.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to delete meal.");
@@ -243,7 +244,7 @@ export default function AdminMeals() {
               <p className="text-sm text-neutral-600 mt-3">{meal.menu}</p>
               <div className="flex gap-2 mt-4">
                 <Button size="sm" variant="outline" onClick={() => startEdit(meal)}>Edit</Button>
-                <Button size="sm" variant="destructive" onClick={() => handleDeleteMeal(meal)}>Delete</Button>
+                <Button size="sm" variant="destructive" onClick={() => setMealToDelete(meal)}>Delete</Button>
               </div>
             </div>
           ))}
@@ -280,7 +281,7 @@ export default function AdminMeals() {
                     <button onClick={() => startEdit(meal)} className="text-indigo-600 hover:text-indigo-900 mr-3" title="Edit meal">
                       <Edit2 className="w-4 h-4" />
                     </button>
-                    <button onClick={() => handleDeleteMeal(meal)} className="text-red-600 hover:text-red-900" title="Delete meal">
+                    <button onClick={() => setMealToDelete(meal)} className="text-red-600 hover:text-red-900" title="Delete meal">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
@@ -297,6 +298,14 @@ export default function AdminMeals() {
         </>
         )}
       </div>
+      <ConfirmDialog
+        open={!!mealToDelete}
+        title="Delete meal?"
+        message={mealToDelete ? `This removes ${mealToDelete.type} and related scan records.` : ""}
+        confirmLabel="Delete meal"
+        onCancel={() => setMealToDelete(null)}
+        onConfirm={() => mealToDelete && handleDeleteMeal(mealToDelete)}
+      />
     </div>
   );
 }

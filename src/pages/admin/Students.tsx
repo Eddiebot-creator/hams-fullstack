@@ -8,6 +8,8 @@ import { api, type Student } from "@/src/lib/api";
 import { paginate } from "@/src/lib/pagination";
 import { CardSkeleton } from "@/src/components/ui/skeleton";
 import { showToast } from "@/src/components/ui/toast";
+import { ConfirmDialog } from "@/src/components/ui/confirm-dialog";
+import { EmptyState } from "@/src/components/ui/empty-state";
 
 export default function AdminStudents() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -19,6 +21,7 @@ export default function AdminStudents() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
   const [form, setForm] = useState({
     name: "",
     studentId: "",
@@ -109,11 +112,10 @@ export default function AdminStudents() {
   };
 
   const handleDeleteStudent = async (student: Student) => {
-    if (!window.confirm(`Delete ${student.name}? This removes the student record and related meal/laundry records.`)) return;
-
     try {
       await api.deleteStudent(student.id);
       setStudents((current) => current.filter((item) => item.id !== student.id));
+      setStudentToDelete(null);
       showToast("Student deleted.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to delete student.");
@@ -305,11 +307,13 @@ export default function AdminStudents() {
                   <Button size="sm" variant="outline">History</Button>
                 </Link>
                 <Button size="sm" variant="outline" onClick={() => startEdit(student)}>Edit</Button>
-                <Button size="sm" variant="destructive" onClick={() => handleDeleteStudent(student)}>Delete</Button>
+                <Button size="sm" variant="destructive" onClick={() => setStudentToDelete(student)}>Delete</Button>
               </div>
             </div>
           ))}
-          {pagedStudents.items.length === 0 && <p className="text-sm text-neutral-500 text-center py-8">No students match your search.</p>}
+          {pagedStudents.items.length === 0 && (
+            <EmptyState icon={UserPlus} title="No students found" message="Try another search or create a new student profile." actionLabel="Add Student" onAction={() => setIsAdding(true)} />
+          )}
         </div>
 
         <div className="hidden overflow-x-auto md:block">
@@ -343,7 +347,7 @@ export default function AdminStudents() {
                     <button onClick={() => startEdit(student)} className="text-indigo-600 hover:text-indigo-900 mr-3" title="Edit student">
                       <Edit2 className="h-4 w-4" />
                     </button>
-                    <button onClick={() => handleDeleteStudent(student)} className="text-red-600 hover:text-red-900" title="Delete student">
+                    <button onClick={() => setStudentToDelete(student)} className="text-red-600 hover:text-red-900" title="Delete student">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </td>
@@ -362,6 +366,14 @@ export default function AdminStudents() {
         </>
         )}
       </div>
+      <ConfirmDialog
+        open={!!studentToDelete}
+        title="Delete student?"
+        message={studentToDelete ? `This removes ${studentToDelete.name} and related meal/laundry records.` : ""}
+        confirmLabel="Delete student"
+        onCancel={() => setStudentToDelete(null)}
+        onConfirm={() => studentToDelete && handleDeleteStudent(studentToDelete)}
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { CalendarClock, ClipboardList, Download, Edit2, IdCard, PackagePlus, Sea
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type LaundryBasket } from "@/src/lib/api";
+import { ConfirmDialog } from "@/src/components/ui/confirm-dialog";
 
 export default function LaundryBaskets() {
   const [baskets, setBaskets] = useState<LaundryBasket[]>([]);
@@ -14,6 +15,7 @@ export default function LaundryBaskets() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [basketToDelete, setBasketToDelete] = useState<LaundryBasket | null>(null);
   const [form, setForm] = useState({
     basketCode: "",
     studentId: "",
@@ -93,11 +95,10 @@ export default function LaundryBaskets() {
   };
 
   const handleDeleteBasket = async (basket: LaundryBasket) => {
-    if (!window.confirm(`Delete basket #${basket.basketCode}?`)) return;
-
     try {
       await api.deleteLaundryBasket(basket.id);
       setBaskets((current) => current.filter((item) => item.id !== basket.id));
+      setBasketToDelete(null);
       setMessage(`Basket #${basket.basketCode} deleted.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to delete basket.");
@@ -301,7 +302,7 @@ export default function LaundryBaskets() {
               <div className="flex flex-wrap gap-2 mt-4">
                 {basket.status === "Pending Approval" && <Button size="sm" onClick={() => approveBasket(basket)} className="bg-green-600 hover:bg-green-700 text-white">Approve</Button>}
                 <Button size="sm" variant="outline" onClick={() => startEdit(basket)}>Edit</Button>
-                <Button size="sm" variant="destructive" onClick={() => handleDeleteBasket(basket)}>Delete</Button>
+                <Button size="sm" variant="destructive" onClick={() => setBasketToDelete(basket)}>Delete</Button>
               </div>
             </div>
           ))}
@@ -344,7 +345,7 @@ export default function LaundryBaskets() {
                     <button onClick={() => startEdit(basket)} className="text-indigo-600 hover:text-indigo-900 mr-3" title="Edit basket">
                       <Edit2 className="h-4 w-4" />
                     </button>
-                    <button onClick={() => handleDeleteBasket(basket)} className="text-red-600 hover:text-red-900" title="Delete basket">
+                    <button onClick={() => setBasketToDelete(basket)} className="text-red-600 hover:text-red-900" title="Delete basket">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </td>
@@ -354,6 +355,14 @@ export default function LaundryBaskets() {
           </table>
         </div>
       </div>
+      <ConfirmDialog
+        open={!!basketToDelete}
+        title="Delete basket?"
+        message={basketToDelete ? `This removes basket #${basketToDelete.basketCode} from the laundry records.` : ""}
+        confirmLabel="Delete basket"
+        onCancel={() => setBasketToDelete(null)}
+        onConfirm={() => basketToDelete && handleDeleteBasket(basketToDelete)}
+      />
     </div>
   );
 }

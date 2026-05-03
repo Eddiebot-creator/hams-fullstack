@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { UtensilsCrossed, Users, CheckCircle2, Clock, UserRound } from "lucide-react";
+import { UtensilsCrossed, Users, CheckCircle2, Clock, UserRound, ScanLine, Bell } from "lucide-react";
+import { Button } from "@/src/components/ui/button";
 import { api, type KitchenDashboard as KitchenDashboardData } from "@/src/lib/api";
 
 export default function KitchenDashboard() {
@@ -25,6 +27,21 @@ export default function KitchenDashboard() {
           <h1 className="text-2xl font-bold text-neutral-900">Kitchen Dashboard</h1>
           <p className="text-sm text-neutral-500 mt-1">Signed in as {staffName}</p>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Link to="/kitchen/scanner">
+          <Button className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white">
+            <ScanLine className="w-4 h-4" />
+            Open Meal Scanner
+          </Button>
+        </Link>
+        <Link to="/kitchen/notifications">
+          <Button variant="outline" className="w-full h-12">
+            <Bell className="w-4 h-4" />
+            View Updates
+          </Button>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
