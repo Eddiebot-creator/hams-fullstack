@@ -124,6 +124,7 @@ export default function App() {
           <Route path="qr" element={<Page><StudentQR /></Page>} />
           <Route path="laundry" element={<Page><StudentLaundry /></Page>} />
           <Route path="profile" element={<Page><StudentProfile /></Page>} />
+          <Route path="account" element={<Page><Account /></Page>} />
           <Route path="notifications" element={<Page><Notifications /></Page>} />
         </Route>
 

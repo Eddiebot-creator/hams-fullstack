@@ -3,7 +3,7 @@ import {
   Home, QrCode, Shirt, User, 
   ScanLine, UtensilsCrossed, 
   Package, FileText, 
-  Users, BarChart3, LogOut, Bell, ShieldCheck, Columns3, Search, AlertTriangle, Database, CheckSquare, Plus
+  Users, BarChart3, LogOut, Bell, ShieldCheck, Columns3, Search, AlertTriangle, Database, CheckSquare, Plus, Settings
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, type Notification } from "@/src/lib/api";
@@ -18,12 +18,13 @@ const navConfig = {
     { name: "Laundry", path: "/student/laundry", icon: Shirt },
     { name: "Updates", path: "/student/notifications", icon: Bell },
     { name: "Profile", path: "/student/profile", icon: User },
+    { name: "Settings", path: "/student/account", icon: Settings },
   ],
   kitchen: [
     { name: "Dashboard", path: "/kitchen", icon: Home },
     { name: "Scanner", path: "/kitchen/scanner", icon: ScanLine },
     { name: "Updates", path: "/kitchen/notifications", icon: Bell },
-    { name: "Account", path: "/kitchen/account", icon: User },
+    { name: "Settings", path: "/kitchen/account", icon: Settings },
   ],
   laundry: [
     { name: "Dashboard", path: "/laundry-staff", icon: Home },
@@ -33,7 +34,7 @@ const navConfig = {
     { name: "Issues", path: "/laundry-staff/issues", icon: AlertTriangle },
     { name: "Scanner", path: "/laundry-staff/scanner", icon: ScanLine },
     { name: "Updates", path: "/laundry-staff/notifications", icon: Bell },
-    { name: "Account", path: "/laundry-staff/account", icon: User },
+    { name: "Settings", path: "/laundry-staff/account", icon: Settings },
   ],
   admin: [
     { name: "Dashboard", path: "/admin", icon: Home },
@@ -45,7 +46,7 @@ const navConfig = {
     { name: "Audit", path: "/admin/audit", icon: ShieldCheck },
     { name: "Tools", path: "/admin/tools", icon: Database },
     { name: "Updates", path: "/admin/notifications", icon: Bell },
-    { name: "Account", path: "/admin/account", icon: User },
+    { name: "Settings", path: "/admin/account", icon: Settings },
   ]
 };
 

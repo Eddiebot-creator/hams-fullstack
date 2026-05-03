@@ -61,6 +61,7 @@ const labels: Record<string, string> = {
   "/student/qr": "My QR",
   "/student/laundry": "Laundry Requests",
   "/student/profile": "Profile",
+  "/student/account": "Settings",
   "/student/notifications": "Updates",
   "/kitchen": "Kitchen Dashboard",
   "/kitchen/scanner": "Meal Scanner",
