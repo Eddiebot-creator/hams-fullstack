@@ -4,6 +4,7 @@ import { Download, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { api, type LaundryReports as LaundryReportsData } from "@/src/lib/api";
 import { CardSkeleton } from "@/src/components/ui/skeleton";
+import { SelectMenu, type SelectMenuOption } from "@/src/components/ui/select-menu";
 
 export default function LaundryReports() {
   const [data, setData] = useState<LaundryReportsData | null>(null);
@@ -15,6 +16,14 @@ export default function LaundryReports() {
 
   const filteredReports = (data?.reports ?? []).filter((report) => periodFilter === "All" || report.reportPeriod === periodFilter);
   const weeklyReport = filteredReports[0] ?? data?.reports[0];
+  const periodOptions: SelectMenuOption[] = [
+    { value: "All", label: "All periods", description: "View every report" },
+    ...(data?.reports ?? []).map((report) => ({
+      value: report.reportPeriod,
+      label: report.reportPeriod,
+      description: `${report.totalBasketsProcessed} baskets, ${report.reportedIssues} issues`,
+    })),
+  ];
 
   const exportCsv = () => {
     if (!data) return;
@@ -51,11 +60,8 @@ export default function LaundryReports() {
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-neutral-900">Reports</h1>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <select value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value)} className="flex h-10 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
-            <option value="All">All periods</option>
-            {(data?.reports ?? []).map((report) => <option key={report.id} value={report.reportPeriod}>{report.reportPeriod}</option>)}
-          </select>
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+          <SelectMenu value={periodFilter} onChange={setPeriodFilter} options={periodOptions} label="Report period" />
           <Button variant="outline" onClick={() => window.print()} disabled={!data}>Print</Button>
           <Button variant="outline" className="flex items-center" onClick={exportCsv} disabled={!data}>
             <Download className="w-4 h-4 mr-2" />
