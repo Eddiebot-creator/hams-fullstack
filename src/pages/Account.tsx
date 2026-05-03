@@ -3,6 +3,7 @@ import { Bell, ImagePlus, KeyRound, Phone, Settings, UserRound } from "lucide-re
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { PasswordInput } from "@/src/components/ui/password-input";
+import { SelectMenu } from "@/src/components/ui/select-menu";
 import { api, type UserPreferences } from "@/src/lib/api";
 import { showToast } from "@/src/components/ui/toast";
 
@@ -153,15 +154,15 @@ export default function Account() {
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <select value={preferences.theme} onChange={(event) => setPreferences({ ...preferences, theme: event.target.value as UserPreferences["theme"] })} className="h-10 rounded-md border border-neutral-200 bg-white px-3 text-sm">
-            <option value="system">System theme</option>
-            <option value="light">Light theme</option>
-            <option value="dark">Dark theme</option>
-          </select>
-          <select value={preferences.dashboardLayout} onChange={(event) => setPreferences({ ...preferences, dashboardLayout: event.target.value as UserPreferences["dashboardLayout"] })} className="h-10 rounded-md border border-neutral-200 bg-white px-3 text-sm">
-            <option value="comfortable">Comfortable layout</option>
-            <option value="compact">Compact layout</option>
-          </select>
+          <SelectMenu value={preferences.theme} onChange={(value) => setPreferences({ ...preferences, theme: value as UserPreferences["theme"] })} label="Theme" options={[
+            { value: "system", label: "System theme", description: "Follow device setting" },
+            { value: "light", label: "Light theme", description: "Bright interface" },
+            { value: "dark", label: "Dark theme", description: "Reduced brightness" },
+          ]} />
+          <SelectMenu value={preferences.dashboardLayout} onChange={(value) => setPreferences({ ...preferences, dashboardLayout: value as UserPreferences["dashboardLayout"] })} label="Dashboard layout" options={[
+            { value: "comfortable", label: "Comfortable layout", description: "More spacing" },
+            { value: "compact", label: "Compact layout", description: "More data on screen" },
+          ]} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {["laundry", "meals", "password", "admin"].map((key) => (

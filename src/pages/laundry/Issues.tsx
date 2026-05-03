@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
+import { SelectMenu } from "@/src/components/ui/select-menu";
 import { api, type LaundryBasket, type LaundryIssue } from "@/src/lib/api";
 import { showToast } from "@/src/components/ui/toast";
 
@@ -43,16 +44,16 @@ export default function LaundryIssues() {
       </div>
 
       <form onSubmit={submit} className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-5 grid grid-cols-1 md:grid-cols-4 gap-3">
-        <select required value={form.basketId} onChange={(event) => setForm({ ...form, basketId: event.target.value })} className="h-10 rounded-md border border-neutral-200 bg-white px-3 text-sm">
-          <option value="">Select basket</option>
-          {baskets.map((basket) => <option key={basket.id} value={basket.id}>#{basket.basketCode} - {basket.studentId}</option>)}
-        </select>
-        <select value={form.issueType} onChange={(event) => setForm({ ...form, issueType: event.target.value })} className="h-10 rounded-md border border-neutral-200 bg-white px-3 text-sm">
-          <option>Damaged item</option>
-          <option>Missing item</option>
-          <option>Delayed basket</option>
-          <option>Wrong basket</option>
-        </select>
+        <SelectMenu value={form.basketId} onChange={(value) => setForm({ ...form, basketId: value })} label="Basket" className="min-w-0" options={[
+          { value: "", label: "Select basket", description: "Choose record" },
+          ...baskets.map((basket) => ({ value: String(basket.id), label: `#${basket.basketCode}`, description: basket.studentId })),
+        ]} />
+        <SelectMenu value={form.issueType} onChange={(value) => setForm({ ...form, issueType: value })} label="Issue type" className="min-w-0" options={[
+          { value: "Damaged item", label: "Damaged item", description: "Item needs review" },
+          { value: "Missing item", label: "Missing item", description: "Item not found" },
+          { value: "Delayed basket", label: "Delayed basket", description: "Taking too long" },
+          { value: "Wrong basket", label: "Wrong basket", description: "Mismatch found" },
+        ]} />
         <Input value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Issue notes" />
         <Button className="bg-indigo-600 hover:bg-indigo-700 text-white"><AlertTriangle className="w-4 h-4" /> Save Issue</Button>
       </form>

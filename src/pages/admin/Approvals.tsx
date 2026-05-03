@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
+import { SelectMenu } from "@/src/components/ui/select-menu";
 import { api, type ApprovalRequest } from "@/src/lib/api";
 import { showToast } from "@/src/components/ui/toast";
 
@@ -31,12 +32,12 @@ export default function AdminApprovals() {
           <h1 className="text-2xl font-bold text-neutral-900">Approval Queue</h1>
           <p className="text-sm text-neutral-500 mt-1">Review laundry requests, password resets, and reported issues.</p>
         </div>
-        <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-md border border-neutral-200 bg-white px-3 text-sm">
-          <option>Pending</option>
-          <option>Approved</option>
-          <option>Rejected</option>
-          <option>All</option>
-        </select>
+        <SelectMenu value={status} onChange={setStatus} label="Queue status" options={[
+          { value: "Pending", label: "Pending", description: "Needs review" },
+          { value: "Approved", label: "Approved", description: "Accepted requests" },
+          { value: "Rejected", label: "Rejected", description: "Declined requests" },
+          { value: "All", label: "All", description: "Every request" },
+        ]} />
       </div>
 
       <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm divide-y divide-neutral-100">

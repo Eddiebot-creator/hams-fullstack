@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { CalendarClock, ClipboardList, Download, Edit2, IdCard, PackagePlus, Search, Filter, StickyNote, Trash2, UserRound } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
+import { SelectMenu } from "@/src/components/ui/select-menu";
 import { api, type LaundryBasket } from "@/src/lib/api";
 import { ConfirmDialog } from "@/src/components/ui/confirm-dialog";
 
@@ -181,18 +182,13 @@ export default function LaundryBaskets() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-sm font-medium text-neutral-700">Basket status</span>
-                <select
-                  value={form.status}
-                  onChange={(event) => updateForm("status", event.target.value)}
-                  className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                >
-                  <option value="Pending">Pending</option>
-                  <option value="Pending Approval">Pending Approval</option>
-                  <option value="Washing">Washing</option>
-                  <option value="Ready">Ready</option>
-                  <option value="Picked Up">Picked Up</option>
-                </select>
+                <SelectMenu value={form.status} onChange={(value) => updateForm("status", value)} label="Basket status" className="min-w-0" options={[
+                  { value: "Pending", label: "Pending", description: "Waiting to begin" },
+                  { value: "Pending Approval", label: "Pending Approval", description: "Needs admin approval" },
+                  { value: "Washing", label: "Washing", description: "In progress" },
+                  { value: "Ready", label: "Ready", description: "Ready for pickup" },
+                  { value: "Picked Up", label: "Picked Up", description: "Returned to student" },
+                ]} />
               </label>
 
               <label className="space-y-2">
@@ -265,18 +261,14 @@ export default function LaundryBaskets() {
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <Filter className="w-4 h-4 text-neutral-400" />
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="flex h-10 w-full sm:w-48 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-            >
-              <option value="All">All statuses</option>
-              <option value="Pending Approval">Pending Approval</option>
-              <option value="Pending">Pending</option>
-              <option value="Washing">Washing</option>
-              <option value="Ready">Ready</option>
-              <option value="Picked Up">Picked Up</option>
-            </select>
+            <SelectMenu value={statusFilter} onChange={setStatusFilter} label="Status" className="w-full sm:w-60" options={[
+              { value: "All", label: "All statuses", description: "Every basket" },
+              { value: "Pending Approval", label: "Pending Approval", description: "Needs review" },
+              { value: "Pending", label: "Pending", description: "Waiting" },
+              { value: "Washing", label: "Washing", description: "In progress" },
+              { value: "Ready", label: "Ready", description: "Ready baskets" },
+              { value: "Picked Up", label: "Picked Up", description: "Completed" },
+            ]} />
           </div>
         </div>
         

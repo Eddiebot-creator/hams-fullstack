@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { IdCard, CheckCircle2, XCircle, UserRound, Building2, BookOpen } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
+import { SelectMenu } from "@/src/components/ui/select-menu";
 import { api, type Meal, type Student } from "@/src/lib/api";
 import CameraQrScanner from "@/src/components/scanner/CameraQrScanner";
 
@@ -83,18 +84,11 @@ export default function KitchenScanner() {
                 <Input value={studentId} onChange={(event) => setStudentId(event.target.value)} placeholder="240011223" />
               </label>
               <label className="space-y-2">
-                <span className="text-sm font-medium text-neutral-700">Meal to scan</span>
-                <select
-                  value={mealId}
-                  onChange={(event) => setMealId(Number(event.target.value))}
-                  className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                >
-                  {meals.map((meal) => (
-                    <option key={meal.id} value={meal.id}>
-                      {meal.type} ({meal.status})
-                    </option>
-                  ))}
-                </select>
+                <SelectMenu value={String(mealId)} onChange={(value) => setMealId(Number(value))} label="Meal to scan" options={meals.map((meal) => ({
+                  value: String(meal.id),
+                  label: meal.type,
+                  description: meal.status,
+                }))} />
               </label>
               <label className="space-y-2">
                 <span className="text-sm font-medium text-neutral-700">Late/override reason</span>

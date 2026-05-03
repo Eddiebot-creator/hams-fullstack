@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { Clock, Download, Edit2, Plus, Search, Trash2, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
+import { SelectMenu } from "@/src/components/ui/select-menu";
 import { api, type Meal } from "@/src/lib/api";
 import { CardSkeleton } from "@/src/components/ui/skeleton";
 import { showToast } from "@/src/components/ui/toast";
@@ -157,16 +158,11 @@ export default function AdminMeals() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-sm font-medium text-neutral-700">Status</span>
-                <select
-                  value={form.status}
-                  onChange={(event) => updateForm("status", event.target.value)}
-                  className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                >
-                  <option value="Completed">Completed</option>
-                  <option value="Active">Active</option>
-                  <option value="Upcoming">Upcoming</option>
-                </select>
+                <SelectMenu value={form.status} onChange={(value) => updateForm("status", value)} label="Status" className="min-w-0" options={[
+                  { value: "Completed", label: "Completed", description: "Meal is finished" },
+                  { value: "Active", label: "Active", description: "Scanning open" },
+                  { value: "Upcoming", label: "Upcoming", description: "Scheduled later" },
+                ]} />
               </label>
 
               <label className="space-y-2 md:col-span-2 xl:col-span-1">
@@ -206,16 +202,12 @@ export default function AdminMeals() {
               className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full"
             />
           </div>
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            className="flex h-10 w-full sm:w-44 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-          >
-            <option value="All">All statuses</option>
-            <option value="Completed">Completed</option>
-            <option value="Active">Active</option>
-            <option value="Upcoming">Upcoming</option>
-          </select>
+          <SelectMenu value={statusFilter} onChange={setStatusFilter} label="Status" className="w-full sm:w-56" options={[
+            { value: "All", label: "All statuses", description: "Every meal" },
+            { value: "Completed", label: "Completed", description: "Finished meals" },
+            { value: "Active", label: "Active", description: "Currently open" },
+            { value: "Upcoming", label: "Upcoming", description: "Scheduled meals" },
+          ]} />
         </div>
         {isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">

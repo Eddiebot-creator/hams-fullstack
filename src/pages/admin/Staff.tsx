@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Mail, Search, ShieldCheck, UserPlus } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
+import { SelectMenu } from "@/src/components/ui/select-menu";
 import { api, type StaffUser } from "@/src/lib/api";
 import { showToast } from "@/src/components/ui/toast";
 import { CardSkeleton } from "@/src/components/ui/skeleton";
@@ -70,15 +71,15 @@ export default function AdminStaff() {
           <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-5">
             <Input required placeholder="Full name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
             <Input required type="email" placeholder="Email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
-            <select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as "kitchen" | "laundry" | "admin" })} className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
-              <option value="kitchen">Kitchen</option>
-              <option value="laundry">Laundry</option>
-              <option value="admin">Admin</option>
-            </select>
-            <select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })} className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
+            <SelectMenu value={form.role} onChange={(value) => setForm({ ...form, role: value as "kitchen" | "laundry" | "admin" })} label="Role" className="min-w-0" options={[
+              { value: "kitchen", label: "Kitchen", description: "Meal scanner access" },
+              { value: "laundry", label: "Laundry", description: "Laundry tools" },
+              { value: "admin", label: "Admin", description: "Full management" },
+            ]} />
+            <SelectMenu value={form.status} onChange={(value) => setForm({ ...form, status: value })} label="Status" className="min-w-0" options={[
+              { value: "Active", label: "Active", description: "Can sign in" },
+              { value: "Inactive", label: "Inactive", description: "Access paused" },
+            ]} />
           </div>
           <div className="px-6 py-4 border-t border-neutral-100 bg-neutral-50 flex justify-end gap-3">
             <Button type="button" variant="outline" onClick={() => setIsAdding(false)}>Cancel</Button>
@@ -94,12 +95,12 @@ export default function AdminStaff() {
           </div>
           <Input placeholder="Search staff name or email..." value={search} onChange={(event) => setSearch(event.target.value)} className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full" />
         </div>
-        <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className="flex h-10 w-full sm:w-44 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
-          <option value="All">All roles</option>
-          <option value="kitchen">Kitchen</option>
-          <option value="laundry">Laundry</option>
-          <option value="admin">Admin</option>
-        </select>
+        <SelectMenu value={roleFilter} onChange={setRoleFilter} label="Role" className="w-full sm:w-56" options={[
+          { value: "All", label: "All roles", description: "Every staff type" },
+          { value: "kitchen", label: "Kitchen", description: "Kitchen staff" },
+          { value: "laundry", label: "Laundry", description: "Laundry staff" },
+          { value: "admin", label: "Admin", description: "Administrators" },
+        ]} />
       </div>
 
       {isLoading ? (

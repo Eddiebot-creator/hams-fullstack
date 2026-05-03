@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { BookOpen, Building2, Download, Edit2, IdCard, Mail, Phone, Search, Trash2, User, UserPlus } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
+import { SelectMenu } from "@/src/components/ui/select-menu";
 import { api, type Student } from "@/src/lib/api";
 import { paginate } from "@/src/lib/pagination";
 import { CardSkeleton } from "@/src/components/ui/skeleton";
@@ -220,15 +221,10 @@ export default function AdminStudents() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-sm font-medium text-neutral-700">Account status</span>
-                <select
-                  value={form.status}
-                  onChange={(event) => updateForm("status", event.target.value)}
-                  className="flex h-10 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
+                <SelectMenu value={form.status} onChange={(value) => updateForm("status", value)} label="Account status" className="min-w-0" options={[
+                  { value: "Active", label: "Active", description: "Can use services" },
+                  { value: "Inactive", label: "Inactive", description: "Access paused" },
+                ]} />
               </label>
             </div>
 
@@ -267,15 +263,11 @@ export default function AdminStudents() {
               className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full"
             />
           </div>
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            className="flex h-10 w-full sm:w-44 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-          >
-            <option value="All">All statuses</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
+          <SelectMenu value={statusFilter} onChange={setStatusFilter} label="Status" className="w-full sm:w-56" options={[
+            { value: "All", label: "All statuses", description: "Every student" },
+            { value: "Active", label: "Active", description: "Enabled accounts" },
+            { value: "Inactive", label: "Inactive", description: "Paused accounts" },
+          ]} />
         </div>
         
         {isLoading ? (
