@@ -23,7 +23,7 @@ button:not(:disabled):active {
   transform: translateY(1px) scale(0.99);
 }
 
-input,
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
 select,
 textarea {
   min-height: 3rem;
@@ -39,7 +39,7 @@ textarea {
     background-color 180ms ease;
 }
 
-input,
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
 select {
   padding-inline: 1rem;
 }
@@ -50,27 +50,32 @@ textarea {
 
 select {
   appearance: none;
-  background-image:
-    linear-gradient(45deg, transparent 50%, rgb(82 82 91) 50%),
-    linear-gradient(135deg, rgb(82 82 91) 50%, transparent 50%);
-  background-position:
-    calc(100% - 1.15rem) 1.25rem,
-    calc(100% - 0.8rem) 1.25rem;
-  background-size:
-    0.36rem 0.36rem,
-    0.36rem 0.36rem;
+  background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5.75 7.75L10 12.25L14.25 7.75' stroke='%234F46E5' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 0.9rem center;
+  background-size: 1.1rem;
   background-repeat: no-repeat;
   padding-right: 2.75rem;
 }
 
-input:hover,
+option {
+  background-color: white;
+  color: rgb(23 23 23);
+  font-weight: 500;
+}
+
+option:checked {
+  background-color: rgb(238 242 255);
+  color: rgb(67 56 202);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):hover,
 select:hover,
 textarea:hover {
   border-color: rgb(212 212 216);
   background-color: rgb(250 250 250 / 0.65);
 }
 
-input:focus,
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):focus,
 select:focus,
 textarea:focus {
   outline: 2px solid transparent;
@@ -82,18 +87,34 @@ textarea:focus {
     0 8px 22px rgb(15 23 42 / 0.08);
 }
 
-input::placeholder,
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"])::placeholder,
 textarea::placeholder {
   color: rgb(113 113 122);
   font-weight: 400;
 }
 
-input:disabled,
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):disabled,
 select:disabled,
 textarea:disabled {
   background-color: rgb(244 244 245);
   color: rgb(113 113 122);
   cursor: not-allowed;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  min-height: 0;
+  flex-shrink: 0;
+  accent-color: rgb(79 70 229);
+  box-shadow: none;
+}
+
+input[type="file"],
+input[type="hidden"] {
+  min-height: 0;
+  box-shadow: none;
 }
 
 button:not([class]) {
