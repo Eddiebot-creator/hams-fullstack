@@ -6,6 +6,8 @@ import { PasswordInput } from "@/src/components/ui/password-input";
 import { SelectMenu } from "@/src/components/ui/select-menu";
 import { api, type UserPreferences } from "@/src/lib/api";
 import { showToast } from "@/src/components/ui/toast";
+import { compressImage } from "@/src/lib/image";
+import { applyTheme } from "@/src/lib/theme";
 
 export default function Account() {
   const storedUser = JSON.parse(localStorage.getItem("hamsUser") || "{}");
@@ -43,25 +45,22 @@ export default function Account() {
   };
 
   const savePhoto = async (file: File) => {
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const photoUrl = String(reader.result);
-        const updated = await api.updatePhoto(storedUser.id, { photoUrl });
-        localStorage.setItem("hamsUser", JSON.stringify(updated));
-        setPhotoPreview(photoUrl);
-        showToast("Profile photo saved.");
-      } catch (err) {
-        showToast(err instanceof Error ? err.message : "Unable to save photo.", "error");
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const photoUrl = await compressImage(file);
+      const updated = await api.updatePhoto(storedUser.id, { photoUrl });
+      localStorage.setItem("hamsUser", JSON.stringify(updated));
+      setPhotoPreview(photoUrl);
+      showToast("Profile photo saved.");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Unable to save photo.", "error");
+    }
   };
 
   const savePreferences = async () => {
     try {
       const saved = await api.savePreferences(preferences);
       setPreferences(saved);
+      applyTheme(saved.theme);
       showToast("Preferences saved.");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Unable to save preferences.", "error");
@@ -154,7 +153,11 @@ export default function Account() {
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <SelectMenu value={preferences.theme} onChange={(value) => setPreferences({ ...preferences, theme: value as UserPreferences["theme"] })} label="Theme" options={[
+          <SelectMenu value={preferences.theme} onChange={(value) => {
+            const theme = value as UserPreferences["theme"];
+            setPreferences({ ...preferences, theme });
+            applyTheme(theme);
+          }} label="Theme" options={[
             { value: "system", label: "System theme", description: "Follow device setting" },
             { value: "light", label: "Light theme", description: "Bright interface" },
             { value: "dark", label: "Dark theme", description: "Reduced brightness" },

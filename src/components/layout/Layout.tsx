@@ -3,7 +3,7 @@ import {
   Home, QrCode, Shirt, User, 
   ScanLine, UtensilsCrossed, 
   Package, FileText, 
-  Users, BarChart3, LogOut, Bell, ShieldCheck, Columns3, Search, AlertTriangle, Database, CheckSquare
+  Users, BarChart3, LogOut, Bell, ShieldCheck, Columns3, Search, AlertTriangle, Database, CheckSquare, Plus
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, type Notification } from "@/src/lib/api";
@@ -57,7 +57,10 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("hamsUser") || "{}");
-    api.notifications(role, user.studentId).then(setNotifications).catch(() => setNotifications([]));
+    const loadNotifications = () => api.notifications(role, user.studentId).then(setNotifications).catch(() => setNotifications([]));
+    loadNotifications();
+    const timer = window.setInterval(loadNotifications, 30000);
+    return () => window.clearInterval(timer);
   }, [role]);
 
   const signOut = () => {
@@ -65,6 +68,14 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
     localStorage.removeItem("hamsToken");
     navigate("/login");
   };
+
+  const quickAction = {
+    student: { label: "QR", path: "/student/qr", icon: QrCode },
+    kitchen: { label: "Scan", path: "/kitchen/scanner", icon: ScanLine },
+    laundry: { label: "Basket", path: "/laundry-staff/baskets", icon: Package },
+    admin: { label: "Student", path: "/admin/students", icon: Plus },
+  }[role];
+  const QuickIcon = quickAction.icon;
 
   return (
     <div className="min-h-screen bg-neutral-50 flex flex-col md:flex-row">
@@ -145,10 +156,23 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
         </header>
 
         <RoleTips role={role} />
-        <div className="flex-1 overflow-auto">
+        <div
+          key={location.pathname}
+          className="flex-1 overflow-auto page-enter"
+        >
           <Outlet />
         </div>
       </main>
+
+      <button
+        type="button"
+        onClick={() => navigate(quickAction.path)}
+        className="md:hidden fixed bottom-20 right-4 z-50 inline-flex h-14 min-w-14 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-xl shadow-indigo-600/30"
+        aria-label={quickAction.label}
+      >
+        <QuickIcon className="h-5 w-5" />
+        <span>{quickAction.label}</span>
+      </button>
 
       {/* Bottom Navigation (Mobile) */}
       <nav className="md:hidden fixed bottom-0 w-full bg-white/95 backdrop-blur border-t border-neutral-200 flex items-center h-16 px-2 z-50 overflow-x-auto">

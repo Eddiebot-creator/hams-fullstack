@@ -5,6 +5,7 @@ import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { PasswordInput } from "@/src/components/ui/password-input";
 import { api, type Notification, type Student } from "@/src/lib/api";
+import { compressImage } from "@/src/lib/image";
 
 export default function Profile() {
   const [student, setStudent] = useState<Student | null>(null);
@@ -63,16 +64,17 @@ export default function Profile() {
     setNotifications((current) => current.map((item) => ({ ...item, isRead: 1 })));
   };
 
-  const savePhoto = (file: File) => {
+  const savePhoto = async (file: File) => {
     if (!student) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const updated = await api.updatePhoto(student.id, { photoUrl: String(reader.result) });
+    try {
+      const photoUrl = await compressImage(file);
+      const updated = await api.updatePhoto(student.id, { photoUrl });
       setStudent(updated);
       localStorage.setItem("hamsUser", JSON.stringify(updated));
       setMessage("Profile photo updated.");
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Unable to update photo.");
+    }
   };
 
   return (
