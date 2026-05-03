@@ -10,6 +10,7 @@ import io
 import json
 import secrets
 from pathlib import Path
+from datetime import datetime, timezone
 from functools import wraps
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -35,6 +36,14 @@ MYSQL_POOL = queue.LifoQueue(maxsize=int(os.environ.get("MYSQL_POOL_SIZE", "5"))
 RESPONSE_CACHE = {}
 JWT_SECRET = os.environ.get("SECRET_KEY", "hams-development-secret-change-me")
 TOKEN_TTL_SECONDS = int(os.environ.get("TOKEN_TTL_SECONDS", "86400"))
+
+
+def utc_now_text():
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def is_password_hash(value):
+    return str(value).startswith(("scrypt:", "pbkdf2:", "argon2:"))
 
 
 def clear_response_cache():
@@ -420,7 +429,36 @@ def init_db():
 
         seed_db(conn)
         seed_supporting_tables(conn)
+        migrate_plaintext_passwords(conn)
+        ensure_database_indexes(conn)
     DB_INIT_ERROR = None
+
+
+def ensure_database_indexes(conn):
+    indexes = [
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_meal_scans_student_meal ON meal_scans (student_id, meal_id)",
+        "CREATE INDEX IF NOT EXISTS idx_users_role_student ON users (role, student_id)",
+        "CREATE INDEX IF NOT EXISTS idx_users_role_name ON users (role, name)",
+        "CREATE INDEX IF NOT EXISTS idx_laundry_baskets_student_status ON laundry_baskets (student_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_notifications_target ON notifications (user_role, student_id, is_read)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs (created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_kitchen_scan_logs_student ON kitchen_scan_logs (student_id)",
+    ]
+    for sql in indexes:
+        try:
+            conn.execute(sql)
+        except Exception as exc:
+            print(f"Skipping index setup: {exc}")
+    conn.commit()
+
+
+def migrate_plaintext_passwords(conn):
+    rows = conn.execute("SELECT id, password FROM users").fetchall()
+    for row in rows:
+        password = row["password"]
+        if password and not is_password_hash(password):
+            conn.execute("UPDATE users SET password = ? WHERE id = ?", (generate_password_hash(password), row["id"]))
+    conn.commit()
 
 
 def init_db_safely():
@@ -763,7 +801,7 @@ def create_app():
             response.headers["Access-Control-Allow-Origin"] = origin
         else:
             response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
         return response
 
@@ -802,6 +840,44 @@ def create_app():
             return jsonify({"students": [], "staff": [], "baskets": [], "meals": []})
 
         like_query = f"%{query}%"
+        user = current_user()
+        role = user.get("role")
+
+        if role == "student":
+            student_id = str(user.get("studentId") or "")
+            students_rows = query_all(
+                """
+                SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
+                FROM users
+                WHERE role = 'student' AND student_id = ? AND (name LIKE ? OR email LIKE ? OR student_id LIKE ? OR hostel LIKE ?)
+                ORDER BY name
+                LIMIT 1
+                """,
+                (student_id, like_query, like_query, like_query, like_query),
+            )
+            baskets = query_all(
+                """
+                SELECT id, basket_code AS basketCode, student_id AS studentId, status,
+                       received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                FROM laundry_baskets
+                WHERE student_id = ? AND (basket_code LIKE ? OR status LIKE ?)
+                ORDER BY id DESC
+                LIMIT 8
+                """,
+                (student_id, like_query, like_query),
+            )
+            meals_rows = query_all(
+                """
+                SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status
+                FROM meals
+                WHERE type LIKE ? OR menu LIKE ? OR status LIKE ?
+                ORDER BY id
+                LIMIT 8
+                """,
+                (like_query, like_query, like_query),
+            )
+            return jsonify({"students": students_rows, "staff": [], "baskets": baskets, "meals": meals_rows})
+
         students_rows = query_all(
             """
             SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
@@ -812,7 +888,7 @@ def create_app():
             """,
             (like_query, like_query, like_query, like_query),
         )
-        staff_rows = query_all(
+        staff_rows = [] if role in ("kitchen", "laundry") else query_all(
             """
             SELECT id, name, email, role, status
             FROM users
@@ -822,7 +898,7 @@ def create_app():
             """,
             (like_query, like_query, like_query),
         )
-        baskets = query_all(
+        baskets = [] if role == "kitchen" else query_all(
             """
             SELECT id, basket_code AS basketCode, student_id AS studentId, status,
                    received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
@@ -848,23 +924,22 @@ def create_app():
     @app.post("/api/auth/login")
     def login():
         payload = request.get_json(silent=True) or {}
-        email = payload.get("email")
+        email = (payload.get("email") or "").strip()
         password = payload.get("password")
-        role = payload.get("role")
 
-        if not email or not password or not role:
-            return jsonify({"message": "Email, password, and role are required."}), 400
+        if not email or not password:
+            return jsonify({"message": "Email and password are required."}), 400
 
         user = query_one(
             """
             SELECT id, name, email, password, role, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
             FROM users
-            WHERE email = ? AND role = ?
+            WHERE email = ?
             """,
-            (email, role),
+            (email,),
         )
 
-        if user is None or not (user["password"] == password or check_password_hash(user["password"], password)):
+        if user is None or not check_password_hash(user["password"], password):
             with get_connection() as conn:
                 log_action(conn, "unknown", "failed login", "user", email)
                 conn.commit()
@@ -998,6 +1073,8 @@ def create_app():
             return jsonify({"message": "You can only update your own photo."}), 403
         payload = request.get_json(silent=True) or {}
         photo_url = payload.get("photoUrl", "")
+        if photo_url.startswith("data:image/") and len(photo_url) > 1_500_000:
+            return jsonify({"message": "Photo is too large. Use an image below about 1 MB."}), 413
         if photo_url and not photo_url.startswith(("data:image/", "https://", "http://")):
             return jsonify({"message": "Photo must be an image data URL or image URL."}), 400
         with get_connection() as conn:
@@ -1511,7 +1588,7 @@ def create_app():
             result = conn.execute("UPDATE laundry_baskets SET status = ? WHERE id = ?", (status, basket_id))
             conn.execute(
                 "INSERT INTO laundry_activity (basket_code, action, staff_name, activity_time) VALUES (?, ?, ?, ?)",
-                (basket["basketCode"], f"Moved to {status}", staff_name, "Now"),
+                (basket["basketCode"], f"Moved to {status}", staff_name, utc_now_text()),
             )
             create_notification(
                 conn,
@@ -1679,7 +1756,7 @@ def create_app():
     def request_laundry(student_id):
         payload = request.get_json(silent=True) or {}
         basket_code = payload.get("basketCode") or f"REQ{student_id[-4:]}"
-        received_at = payload.get("receivedAt", "Requested now")
+        received_at = payload.get("receivedAt") or utc_now_text()
 
         try:
             with get_connection() as conn:
@@ -1770,7 +1847,7 @@ def create_app():
                         INSERT INTO laundry_baskets (basket_code, student_id, status, received_at, estimated_finish, notes)
                         VALUES (?, ?, ?, ?, ?, ?)
                         """,
-                        (basket_code, student_id, status, "Now", payload.get("estimatedFinish"), payload.get("notes", "Scanned at laundry desk")),
+                        (basket_code, student_id, status, utc_now_text(), payload.get("estimatedFinish"), payload.get("notes", "Scanned at laundry desk")),
                     )
                     basket_id = cursor.lastrowid
                 else:
@@ -1781,7 +1858,7 @@ def create_app():
 
             conn.execute(
                 "INSERT INTO laundry_activity (basket_code, action, staff_name, activity_time) VALUES (?, ?, ?, ?)",
-                (basket_code, activity, staff_name, "Now"),
+                (basket_code, activity, staff_name, utc_now_text()),
             )
             create_notification(conn, "student", "Laundry scan saved", f"Basket #{basket_code} was {activity.lower()}.", student_id)
             log_action(conn, staff_name, activity.lower(), "basket", basket_code)
@@ -2542,7 +2619,7 @@ def create_app():
                     INSERT INTO kitchen_scan_logs (student_id, meal_type, scanned_time, status)
                     VALUES (?, ?, ?, ?)
                     """,
-                    (student_id, meal["type"], "Now", "Denied (Inactive Student)"),
+                    (student_id, meal["type"], utc_now_text(), "Denied (Inactive Student)"),
                 )
                 log_action(conn, "kitchen", "denied inactive student", "meal", f"{student_id}:{meal['type']}")
                 conn.commit()
@@ -2556,7 +2633,7 @@ def create_app():
                     INSERT INTO kitchen_scan_logs (student_id, meal_type, scanned_time, status)
                     VALUES (?, ?, ?, ?)
                     """,
-                    (student_id, meal["type"], "Now", "Denied (Already Scanned)"),
+                    (student_id, meal["type"], utc_now_text(), "Denied (Already Scanned)"),
                 )
                 log_action(conn, "kitchen", "denied duplicate scan", "meal", f"{student_id}:{meal['type']}")
                 conn.commit()
@@ -2569,7 +2646,7 @@ def create_app():
                 INSERT INTO kitchen_scan_logs (student_id, meal_type, scanned_time, status)
                 VALUES (?, ?, ?, ?)
                 """,
-                (student_id, meal["type"], "Now", "Success"),
+                (student_id, meal["type"], utc_now_text(), "Success"),
             )
             create_notification(conn, "student", "Meal approved", f"Your {meal['type']} scan was approved.", student_id)
             action = "approved scan" if meal["status"] == "Active" else f"approved override scan: {late_reason}"
@@ -2600,4 +2677,5 @@ app = create_app()
 
 if __name__ == "__main__":
     port = int(os.environ.get("API_PORT", "4000"))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    debug = os.environ.get("FLASK_DEBUG", "0") == "1"
+    app.run(host="0.0.0.0", port=port, debug=debug)

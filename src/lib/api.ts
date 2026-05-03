@@ -335,7 +335,7 @@ export type GlobalSearchResults = {
 };
 
 export const api = {
-  login: (payload: { email: string; password: string; role: Role }) =>
+  login: (payload: { email: string; password: string }) =>
     request<{ user: Student & { role: Role }; token: string }>("/auth/login", {
       method: "POST",
       body: JSON.stringify(payload),

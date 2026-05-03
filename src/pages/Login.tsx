@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { Button } from "@/src/components/ui/button";
@@ -31,13 +31,9 @@ const destinations: Record<Role, string> = {
 export default function Login() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
-  const [role, setRole] = useState<Role>("student");
   const [error, setError] = useState("");
-  const [email, setEmail] = useState("student@example.com");
-  const [password, setPassword] = useState("password");
-
-  const selectedRole = useMemo(() => roleOptions.find((option) => option.role === role) ?? roleOptions[0], [role]);
-  const SelectedIcon = selectedRole.icon;
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,11 +41,11 @@ export default function Login() {
     setError("");
 
     try {
-      const { user, token } = await api.login({ email, password, role });
+      const { user, token } = await api.login({ email, password });
       localStorage.setItem("hamsUser", JSON.stringify(user));
       localStorage.setItem("hamsToken", token);
       showToast(`Welcome, ${user.name}.`);
-      navigate(destinations[role]);
+      navigate(destinations[user.role]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in.");
     } finally {
@@ -93,11 +89,11 @@ export default function Login() {
           <div className="p-6 sm:p-8 border-b border-neutral-100">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-indigo-100 flex items-center justify-center">
-                <SelectedIcon className="w-5 h-5 text-indigo-700" />
+                <ShieldAlert className="w-5 h-5 text-indigo-700" />
               </div>
               <div>
                 <h2 className="text-xl font-bold text-neutral-950">Sign in</h2>
-                <p className="text-sm text-neutral-500">{selectedRole.description}</p>
+                <p className="text-sm text-neutral-500">Use your account email and password.</p>
               </div>
             </div>
           </div>
@@ -106,32 +102,22 @@ export default function Login() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {roleOptions.map((option) => {
                 const Icon = option.icon;
-                const isSelected = option.role === role;
 
                 return (
-                  <button
+                  <div
                     key={option.role}
-                    type="button"
-                    onClick={() => {
-                      setRole(option.role);
-                      setEmail(`${option.role}@example.com`);
-                    }}
-                    className={`text-left rounded-2xl border p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
-                      isSelected
-                        ? "border-indigo-500 bg-indigo-50 text-indigo-900"
-                        : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"
-                    }`}
+                    className="text-left rounded-2xl border border-neutral-200 bg-white p-4 text-neutral-700 shadow-sm"
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${isSelected ? "bg-white" : "bg-neutral-50"}`}>
-                        <Icon className={`w-5 h-5 ${isSelected ? "text-indigo-700" : "text-neutral-500"}`} />
+                      <div className="w-9 h-9 rounded-lg bg-neutral-50 flex items-center justify-center">
+                        <Icon className="w-5 h-5 text-indigo-600" />
                       </div>
                       <div>
                         <p className="text-sm font-semibold">{option.label}</p>
-                        <p className="text-xs opacity-75 mt-0.5">{option.role}@example.com</p>
+                        <p className="text-xs opacity-75 mt-0.5">{option.description}</p>
                       </div>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -206,7 +192,7 @@ export default function Login() {
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <>
-                    Enter {selectedRole.label} Workspace
+                    Sign in
                     <ArrowRight className="ml-2 w-4 h-4" />
                   </>
                 )}
