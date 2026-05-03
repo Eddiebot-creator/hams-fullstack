@@ -1,25 +1,43 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { UtensilsCrossed, Shirt, Clock, PackagePlus } from "lucide-react";
+import { Bell, CheckCircle2, Clock, Moon, PackagePlus, QrCode, Shirt, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
-import { api, type StudentOverview } from "@/src/lib/api";
+import { CardSkeleton } from "@/src/components/ui/skeleton";
+import { api, type Notification, type StudentOverview } from "@/src/lib/api";
+
+const laundryStages = ["Pending Approval", "Pending", "Washing", "Ready", "Picked Up"];
 
 export default function Dashboard() {
   const [overview, setOverview] = useState<StudentOverview | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [requestNote, setRequestNote] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("hamsUser") || "{}");
     const studentId = storedUser.studentId || "240011223";
-    api.studentOverview(studentId).then(setOverview).catch(console.error);
+    Promise.all([
+      api.studentOverview(studentId).then(setOverview),
+      api.notifications("student", studentId).then(setNotifications),
+    ]).catch(console.error).finally(() => setIsLoading(false));
   }, []);
 
   const meals = overview?.meals ?? [];
-  const remainingMeals = meals.filter((meal) => !meal.consumed).length;
   const currentLaundry = overview?.laundry[0];
   const studentId = overview?.student.studentId ?? "240011223";
+  const remainingMeals = meals.filter((meal) => !meal.consumed).length;
+  const consumedMeals = meals.length - remainingMeals;
+  const unreadCount = notifications.filter((item) => item.isRead === 0).length;
+  const activeStageIndex = Math.max(laundryStages.indexOf(currentLaundry?.status || ""), 0);
+  const profileCompletion = useMemo(() => {
+    const student = overview?.student;
+    if (!student) return 0;
+    const items = [student.name, student.email, student.studentId, student.hostel, student.room, student.phone, student.photoUrl];
+    return Math.round((items.filter(Boolean).length / items.length) * 100);
+  }, [overview?.student]);
 
   const requestLaundry = async () => {
     setMessage("");
@@ -37,117 +55,154 @@ export default function Dashboard() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-5">
+        <CardSkeleton />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-neutral-900">Student Dashboard</h1>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-5 sm:space-y-6">
+      <section className="rounded-3xl border border-neutral-100 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="h-16 w-16 overflow-hidden rounded-2xl border border-neutral-100 bg-indigo-50 flex items-center justify-center">
+              {overview?.student.photoUrl ? (
+                <img src={overview.student.photoUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-xl font-black text-indigo-700">{overview?.student.name?.slice(0, 1) || "S"}</span>
+              )}
+            </div>
+            <div>
+              <p className="text-sm font-bold uppercase tracking-wide text-indigo-600">Student Home</p>
+              <h1 className="text-2xl font-black text-neutral-950">{overview?.student.name || "Student"}</h1>
+              <p className="text-sm font-medium text-neutral-500">{overview?.student.hostel}{overview?.student.room ? `, ${overview.student.room}` : ""}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:min-w-72">
+            <Metric label="Meals" value={`${consumedMeals}/${meals.length || 0}`} />
+            <Metric label="Laundry" value={currentLaundry?.status || "None"} />
+            <Metric label="Profile" value={`${profileCompletion}%`} />
+          </div>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <QuickAction to="/student/qr" icon={QrCode} label="My QR" tone="bg-indigo-600 text-white border-indigo-600" />
+        <QuickAction to="/student/laundry" icon={Shirt} label="Laundry" tone="bg-sky-50 text-sky-700 border-sky-100" />
+        <QuickAction to="/student/notifications" icon={Bell} label={`Updates${unreadCount ? ` (${unreadCount})` : ""}`} tone="bg-amber-50 text-amber-700 border-amber-100" />
+        <QuickAction to="/student/account" icon={Moon} label="Settings" tone="bg-emerald-50 text-emerald-700 border-emerald-100" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Meals Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-100"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-neutral-900 flex items-center">
-              <UtensilsCrossed className="w-5 h-5 mr-2 text-indigo-600" />
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_0.9fr]">
+        <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border border-neutral-100 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-neutral-950">
+              <UtensilsCrossed className="h-5 w-5 text-indigo-600" />
               Today's Meals
             </h2>
-            <span className="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-              {remainingMeals} Remaining
-            </span>
+            <span className="w-fit rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">{remainingMeals} remaining</span>
           </div>
-          
-          <div className="space-y-4">
-            {meals.map((meal) => (
-              <div key={meal.id} className={`flex items-center justify-between p-4 rounded-xl bg-neutral-50 border border-neutral-100 ${meal.consumed ? "opacity-50" : ""}`}>
-                <div className="flex items-center">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-4 ${meal.consumed ? "bg-neutral-200" : "bg-neutral-100"}`}>
-                    <UtensilsCrossed className={`w-5 h-5 ${meal.consumed ? "text-neutral-500" : "text-neutral-400"}`} />
-                  </div>
+
+          <div className="mt-5 grid gap-3">
+            {meals.length === 0 ? (
+              <EmptyPanel title="No meals scheduled" message="Meal records will appear here after admin creates them." />
+            ) : meals.map((meal) => (
+              <div key={meal.id} className={`rounded-2xl border p-4 ${meal.consumed ? "border-green-100 bg-green-50" : "border-neutral-100 bg-neutral-50"}`}>
+                <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className={`font-medium text-neutral-900 ${meal.consumed ? "line-through" : ""}`}>{meal.type}</p>
-                    <p className="text-sm text-neutral-500">{meal.startTime} - {meal.endTime}</p>
+                    <p className="font-bold text-neutral-950">{meal.type}</p>
+                    <p className="text-sm font-medium text-neutral-500">{meal.startTime} - {meal.endTime}</p>
                   </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${meal.consumed ? "bg-green-100 text-green-800" : "bg-white text-neutral-600"}`}>
+                    {meal.consumed ? "Collected" : meal.status}
+                  </span>
                 </div>
-                <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">{meal.consumed ? "Consumed" : "Pending"}</span>
+                <p className="mt-3 text-sm text-neutral-600">{meal.menu}</p>
+                {meal.scannedAt && <p className="mt-2 text-xs font-semibold text-green-700">Scanned {meal.scannedAt}</p>}
               </div>
             ))}
           </div>
+        </motion.section>
 
-          <div className="mt-6 rounded-xl border border-neutral-100 bg-neutral-50 p-4">
-            <h4 className="text-sm font-semibold text-neutral-900 mb-3">Meal History</h4>
-            <div className="space-y-2">
-              {meals.map((meal) => (
-                <div key={`history-${meal.id}`} className="flex items-center justify-between text-sm">
-                  <span className="text-neutral-600">{meal.type}</span>
-                  <span className={meal.consumed ? "text-green-700 font-medium" : "text-neutral-400"}>
-                    {meal.consumed ? `Collected ${meal.scannedAt || ""}` : "Not collected"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Laundry Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-100"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-neutral-900 flex items-center">
-              <Shirt className="w-5 h-5 mr-2 text-indigo-600" />
-              Laundry Status
+        <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="rounded-3xl border border-neutral-100 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-neutral-950">
+              <Shirt className="h-5 w-5 text-indigo-600" />
+              Laundry Tracking
             </h2>
+            {currentLaundry && <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-bold text-neutral-700">#{currentLaundry.basketCode}</span>}
           </div>
-          
-          <div className="p-6 rounded-xl bg-indigo-50 border border-indigo-100 text-center">
-            <div className="w-16 h-16 mx-auto bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
-              <Shirt className="w-8 h-8 text-indigo-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-neutral-900 mb-1">{currentLaundry?.notes || currentLaundry?.status || "No active basket"}</h3>
-            <p className="text-sm text-neutral-600 mb-4">
-              {currentLaundry ? `Your basket #${currentLaundry.basketCode} is currently ${currentLaundry.status.toLowerCase()}.` : "No laundry basket is currently active."}
+
+          <div className="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+            <p className="font-bold text-neutral-950">{currentLaundry?.status || "No active laundry"}</p>
+            <p className="mt-1 text-sm text-neutral-600">
+              {currentLaundry ? `Estimated finish: ${currentLaundry.estimatedFinish || "Not scheduled"}` : "Request a drop-off when you have laundry ready."}
             </p>
-            
-            <div className="flex items-center justify-center space-x-2 text-sm font-medium text-indigo-700">
-              <Clock className="w-4 h-4" />
-              <span>Estimated finish: {currentLaundry?.estimatedFinish || "Not scheduled"}</span>
-            </div>
           </div>
 
-          <div className="mt-6">
-            <h4 className="text-sm font-medium text-neutral-900 mb-3">Recent Activity</h4>
-            <div className="space-y-3">
-              <div className="flex items-center text-sm">
-                <div className="w-2 h-2 rounded-full bg-indigo-500 mr-3"></div>
-                <span className="text-neutral-600 flex-1">Basket dropped off</span>
-                <span className="text-neutral-400">{currentLaundry?.receivedAt || "No activity"}</span>
-              </div>
-              <div className="flex items-center text-sm">
-                <div className="w-2 h-2 rounded-full bg-green-500 mr-3"></div>
-                <span className="text-neutral-600 flex-1">Basket picked up</span>
-                <span className="text-neutral-400">Mon, 2:30 PM</span>
-              </div>
-            </div>
+          <div className="mt-5 space-y-3">
+            {laundryStages.map((stage, index) => {
+              const reached = !!currentLaundry && index <= activeStageIndex;
+              return (
+                <div key={stage} className="flex items-center gap-3">
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full ${reached ? "bg-indigo-600 text-white" : "bg-neutral-100 text-neutral-400"}`}>
+                    {reached ? <CheckCircle2 className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
+                  </div>
+                  <div>
+                    <p className={`text-sm font-bold ${reached ? "text-neutral-950" : "text-neutral-400"}`}>{stage}</p>
+                    {stage === currentLaundry?.status && <p className="text-xs font-medium text-indigo-700">Current stage</p>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
-          <div className="mt-6 rounded-xl border border-neutral-100 bg-neutral-50 p-4 space-y-3">
-            <h4 className="text-sm font-semibold text-neutral-900 flex items-center">
-              <PackagePlus className="w-4 h-4 mr-2 text-indigo-600" />
+          <div className="mt-6 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 space-y-3">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-neutral-950">
+              <PackagePlus className="h-4 w-4 text-indigo-600" />
               Request laundry drop-off
-            </h4>
+            </h3>
             <Input placeholder="Optional note for laundry staff" value={requestNote} onChange={(event) => setRequestNote(event.target.value)} />
-            <Button onClick={requestLaundry} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">Send Request</Button>
-            {message && <p className="text-sm font-medium text-indigo-700">{message}</p>}
+            <Button onClick={requestLaundry} className="w-full">Send Request</Button>
+            {message && <p className="text-sm font-bold text-indigo-700">{message}</p>}
           </div>
-        </motion.div>
+        </motion.section>
       </div>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-3 text-center">
+      <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">{label}</p>
+      <p className="mt-1 truncate text-sm font-black text-neutral-950">{value}</p>
+    </div>
+  );
+}
+
+function QuickAction({ to, icon: Icon, label, tone }: { to: string; icon: typeof QrCode; label: string; tone: string }) {
+  return (
+    <Link to={to} className={`flex min-h-20 flex-col items-center justify-center gap-2 rounded-2xl border p-3 text-center text-sm font-black shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${tone}`}>
+      <Icon className="h-5 w-5" />
+      {label}
+    </Link>
+  );
+}
+
+function EmptyPanel({ title, message }: { title: string; message: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 p-6 text-center">
+      <p className="font-bold text-neutral-950">{title}</p>
+      <p className="mt-1 text-sm text-neutral-500">{message}</p>
     </div>
   );
 }

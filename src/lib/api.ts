@@ -49,6 +49,7 @@ async function fetchJson<T>(path: string, options: RequestInit, retries: number,
         if (response.status === 401) {
           localStorage.removeItem("hamsToken");
           localStorage.removeItem("hamsUser");
+          window.dispatchEvent(new CustomEvent("hams-session-expired"));
         }
         throw new Error(error.message ?? "Request failed.");
       }
@@ -347,6 +348,16 @@ export type GlobalSearchResults = {
   meals: Meal[];
 };
 
+export type DatabaseHealth = {
+  ok: boolean;
+  database: string;
+  databaseReady?: boolean;
+  users?: number;
+  message?: string;
+};
+
+export type DatabaseSummary = Record<string, number>;
+
 export const api = {
   login: (payload: { email: string; password: string }) =>
     request<{ user: Student & { role: Role }; token: string }>("/auth/login", {
@@ -508,6 +519,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  databaseHealth: () => request<DatabaseHealth>("/database/health", { cacheMs: 5000, timeoutMs: 15000 }),
+  databaseSummary: () => request<DatabaseSummary>("/database/summary", { cacheMs: 10000, timeoutMs: 15000 }),
   backupUrl: () => `${API_BASE_URL}/database/backup`,
   adminAnalytics: () => request<AdminAnalytics>("/admin/analytics", { cacheMs: 20000 }),
   exportUrl: (kind: "students" | "meals" | "baskets" | "audits") => `${API_BASE_URL}/export/${kind}`,

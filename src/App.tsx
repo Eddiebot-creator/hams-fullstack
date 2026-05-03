@@ -4,9 +4,9 @@
  */
 
 import { lazy, Suspense, useEffect, type ReactNode } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import Layout from "./components/layout/Layout";
-import { ToastViewport } from "./components/ui/toast";
+import { showToast, ToastViewport } from "./components/ui/toast";
 import NetworkStatus from "./components/layout/NetworkStatus";
 import { CardSkeleton } from "./components/ui/skeleton";
 
@@ -95,6 +95,21 @@ function ProtectedLayout({ role }: { role: "student" | "kitchen" | "laundry" | "
   return token && user.role === role ? <Layout role={role} /> : <Navigate to="/login" replace />;
 }
 
+function SessionExpiredRedirect() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const onExpired = () => {
+      showToast("Your session expired. Please sign in again.", "error");
+      navigate("/login", { replace: true });
+    };
+    window.addEventListener("hams-session-expired", onExpired);
+    return () => window.removeEventListener("hams-session-expired", onExpired);
+  }, [navigate]);
+
+  return null;
+}
+
 export default function App() {
   useEffect(() => {
     const preload = () => {
@@ -114,6 +129,7 @@ export default function App() {
     <Router>
       <ToastViewport />
       <NetworkStatus />
+      <SessionExpiredRedirect />
       <Routes>
         <Route path="/login" element={<Page><Login /></Page>} />
         <Route path="/reset-password" element={<Page><ResetPassword /></Page>} />
