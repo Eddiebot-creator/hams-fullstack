@@ -39,6 +39,10 @@ export default function AdminStudents() {
     api.students().then(setStudents).catch(console.error).finally(() => setIsLoading(false));
   }, []);
 
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
   const filteredStudents = useMemo(
     () =>
       students.filter((student) => {
@@ -250,7 +254,7 @@ export default function AdminStudents() {
       )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden">
-        <div className="p-4 sm:p-6 border-b border-neutral-100 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(18rem,32rem)_minmax(14rem,18rem)] lg:items-end lg:justify-between">
+        <div className="p-4 sm:p-6 border-b border-neutral-100 grid grid-cols-[minmax(0,1fr)_minmax(10.5rem,13rem)] gap-3 sm:grid-cols-[minmax(18rem,32rem)_minmax(14rem,18rem)] sm:items-end sm:justify-between">
           <div className="relative w-full">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-neutral-400" />
@@ -263,7 +267,7 @@ export default function AdminStudents() {
               className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full"
             />
           </div>
-          <SelectMenu value={statusFilter} onChange={setStatusFilter} label="Status" className="w-full sm:w-56" options={[
+          <SelectMenu value={statusFilter} onChange={setStatusFilter} label="Status" className="min-w-0 w-full" options={[
             { value: "All", label: "All statuses", description: "Every student" },
             { value: "Active", label: "Active", description: "Enabled accounts" },
             { value: "Inactive", label: "Inactive", description: "Paused accounts" },

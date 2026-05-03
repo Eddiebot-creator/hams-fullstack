@@ -412,8 +412,31 @@ button:not([class]) {
     line-height: 1.55rem;
   }
 
+  .mobile-page > div > .flex.items-center.justify-between {
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .mobile-page > div > .flex.items-center.justify-between > div:last-child {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
   .mobile-page .grid {
     gap: 0.875rem;
+  }
+
+  .mobile-page .rounded-2xl,
+  .mobile-page .rounded-3xl {
+    border-radius: 1rem;
+  }
+
+  .mobile-page [class*="shadow-sm"] {
+    box-shadow: 0 8px 26px rgb(15 23 42 / 0.06);
+  }
+
+  .mobile-page [class*="border-b"] {
+    border-bottom-color: rgb(229 231 235 / 0.75);
   }
 
   .mobile-page table {
@@ -437,6 +460,21 @@ button:not([class]) {
   textarea {
     min-height: 3.125rem;
     font-size: 1rem;
+  }
+
+  .mobile-page input::placeholder,
+  .mobile-page textarea::placeholder {
+    font-size: 0.9rem;
+  }
+
+  .mobile-page [role="listbox"] {
+    left: auto;
+    right: 0;
+    min-width: 14rem;
+  }
+
+  .mobile-page [role="option"] {
+    min-height: 3rem;
   }
 
   button,

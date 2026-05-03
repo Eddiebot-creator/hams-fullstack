@@ -88,14 +88,14 @@ export default function AdminStaff() {
         </motion.form>
       )}
 
-      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(18rem,32rem)_minmax(14rem,18rem)] lg:items-end">
+      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-4 grid grid-cols-[minmax(0,1fr)_minmax(10.5rem,13rem)] gap-3 sm:grid-cols-[minmax(18rem,32rem)_minmax(14rem,18rem)] sm:items-end">
         <div className="relative w-full">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search className="h-4 w-4 text-neutral-400" />
           </div>
           <Input placeholder="Search staff name or email..." value={search} onChange={(event) => setSearch(event.target.value)} className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full" />
         </div>
-        <SelectMenu value={roleFilter} onChange={setRoleFilter} label="Role" className="w-full sm:w-56" options={[
+        <SelectMenu value={roleFilter} onChange={setRoleFilter} label="Role" className="min-w-0 w-full" options={[
           { value: "All", label: "All roles", description: "Every staff type" },
           { value: "kitchen", label: "Kitchen", description: "Kitchen staff" },
           { value: "laundry", label: "Laundry", description: "Laundry staff" },

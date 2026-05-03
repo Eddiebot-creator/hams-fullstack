@@ -246,7 +246,7 @@ export default function LaundryBaskets() {
       )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden">
-        <div className="p-4 sm:p-6 border-b border-neutral-100 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(18rem,32rem)_minmax(15rem,20rem)] lg:items-end lg:justify-between">
+        <div className="p-4 sm:p-6 border-b border-neutral-100 grid grid-cols-[minmax(0,1fr)_minmax(10.5rem,13rem)] gap-3 sm:grid-cols-[minmax(18rem,32rem)_minmax(15rem,20rem)] sm:items-end sm:justify-between">
           <div className="relative w-full">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-neutral-400" />
@@ -259,9 +259,9 @@ export default function LaundryBaskets() {
               className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full"
             />
           </div>
-          <div className="flex items-end gap-2 w-full">
+          <div className="flex items-end gap-2 w-full min-w-0">
             <Filter className="mb-4 hidden w-4 h-4 text-neutral-400 sm:block" />
-            <SelectMenu value={statusFilter} onChange={setStatusFilter} label="Status" className="w-full sm:w-60" options={[
+            <SelectMenu value={statusFilter} onChange={setStatusFilter} label="Status" className="min-w-0 w-full" options={[
               { value: "All", label: "All statuses", description: "Every basket" },
               { value: "Pending Approval", label: "Pending Approval", description: "Needs review" },
               { value: "Pending", label: "Pending", description: "Waiting" },
