@@ -13,7 +13,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
         <input
           type={isVisible ? "text" : "password"}
           className={cn(
-            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-11 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+            "flex h-12 w-full rounded-xl border border-neutral-200 bg-white px-4 py-2.5 pr-12 text-sm font-medium text-neutral-950 shadow-sm shadow-neutral-200/60 ring-offset-background transition-all duration-200 placeholder:text-neutral-400 hover:border-neutral-300 hover:bg-neutral-50/60 focus-visible:border-indigo-500 focus-visible:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/15 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70 file:border-0 file:bg-transparent file:text-sm file:font-semibold",
             className
           )}
           ref={ref}
@@ -22,7 +22,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
         <button
           type="button"
           onClick={() => setIsVisible((value) => !value)}
-          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-neutral-500 hover:text-neutral-900"
+          className="absolute inset-y-1.5 right-1.5 flex w-9 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           aria-label={isVisible ? "Hide password" : "Show password"}
         >
           {isVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

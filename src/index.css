@@ -23,18 +23,80 @@ button:not(:disabled):active {
   transform: translateY(1px) scale(0.99);
 }
 
-select {
-  min-height: 2.75rem;
+input,
+select,
+textarea {
+  min-height: 3rem;
   border-radius: 0.75rem;
-  border-color: rgb(229 231 235);
+  border: 1px solid rgb(229 231 235);
   background-color: white;
   color: rgb(23 23 23);
   font-weight: 500;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
 }
 
-select:focus {
+input,
+select {
+  padding-inline: 1rem;
+}
+
+textarea {
+  padding: 0.875rem 1rem;
+}
+
+select {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgb(82 82 91) 50%),
+    linear-gradient(135deg, rgb(82 82 91) 50%, transparent 50%);
+  background-position:
+    calc(100% - 1.15rem) 1.25rem,
+    calc(100% - 0.8rem) 1.25rem;
+  background-size:
+    0.36rem 0.36rem,
+    0.36rem 0.36rem;
+  background-repeat: no-repeat;
+  padding-right: 2.75rem;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: rgb(212 212 216);
+  background-color: rgb(250 250 250 / 0.65);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
   outline: 2px solid transparent;
   outline-offset: 2px;
   border-color: rgb(99 102 241);
-  box-shadow: 0 0 0 3px rgb(99 102 241 / 0.18);
+  background-color: white;
+  box-shadow:
+    0 0 0 4px rgb(99 102 241 / 0.15),
+    0 8px 22px rgb(15 23 42 / 0.08);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgb(113 113 122);
+  font-weight: 400;
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background-color: rgb(244 244 245);
+  color: rgb(113 113 122);
+  cursor: not-allowed;
+}
+
+button:not([class]) {
+  border-radius: 0.75rem;
+  font-weight: 700;
 }

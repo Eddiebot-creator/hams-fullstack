@@ -103,11 +103,11 @@ export default function CameraQrScanner({
       </div>
       <p className="mt-3 min-h-5 text-center text-xs font-medium text-neutral-300">{message}</p>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <Button type="button" onClick={startCamera} disabled={isOpen} className="h-11 bg-indigo-600 text-white hover:bg-indigo-700">
+        <Button type="button" onClick={startCamera} disabled={isOpen}>
           <Camera className="h-4 w-4" />
           Start
         </Button>
-        <Button type="button" onClick={stopCamera} variant="outline" className="h-11 border-neutral-700 bg-neutral-900 text-white hover:bg-neutral-800 hover:text-white">
+        <Button type="button" onClick={stopCamera} variant="secondary">
           <CameraOff className="h-4 w-4" />
           Stop
         </Button>
