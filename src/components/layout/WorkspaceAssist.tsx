@@ -133,41 +133,41 @@ export default function WorkspaceAssist({ role }: { role: Role }) {
   }, [location.pathname, pinned, recent]);
 
   return (
-    <section className="mx-4 mt-4 rounded-3xl border border-neutral-200 bg-white/90 p-4 shadow-sm backdrop-blur sm:mx-6 lg:mx-8">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <section className="mx-3 mt-3 rounded-2xl border border-neutral-200 bg-white/90 p-3 shadow-sm backdrop-blur sm:mx-6 sm:mt-4 sm:rounded-3xl sm:p-4 lg:mx-8">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700 sm:h-9 sm:w-9">
               <Sparkles className="h-4 w-4" />
             </span>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">Workspace assistant</p>
+            <div className="min-w-0">
+              <p className="hidden text-xs font-bold uppercase tracking-wide text-neutral-500 sm:block">Workspace assistant</p>
               <h2 className="text-base font-bold text-neutral-950 sm:text-lg">{currentLabel}</h2>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))}>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+          <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))}>
             <Search className="h-4 w-4" />
             Search
           </Button>
-          <Button type="button" variant={isPinned ? "secondary" : "outline"} size="sm" onClick={togglePinned}>
+          <Button type="button" variant={isPinned ? "secondary" : "outline"} size="sm" className="w-full sm:w-auto" onClick={togglePinned}>
             {isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
             {isPinned ? "Unpin" : "Pin page"}
           </Button>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
-        <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
+        <div className="mobile-scroll-row flex gap-2 overflow-x-auto pb-1">
           {actions[role].map((action) => {
             const Icon = action.icon;
             return (
               <Link
                 key={action.path}
                 to={action.path}
-                className={cn("inline-flex min-w-max items-center gap-2 rounded-2xl border px-3.5 py-2 text-sm font-bold shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md", action.tone)}
+                className={cn("inline-flex min-w-max items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-sm font-bold shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md", action.tone)}
               >
                 <Icon className="h-4 w-4" />
                 {action.label}
@@ -176,7 +176,7 @@ export default function WorkspaceAssist({ role }: { role: Role }) {
           })}
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-1 lg:justify-end">
+        <div className="mobile-scroll-row flex gap-2 overflow-x-auto pb-1 lg:justify-end">
           {visibleLinks.length === 0 ? (
             <span className="inline-flex items-center gap-2 rounded-2xl border border-neutral-200 bg-neutral-50 px-3.5 py-2 text-sm font-semibold text-neutral-500">
               <Clock3 className="h-4 w-4" />

@@ -2,6 +2,8 @@
 
 html {
   background: rgb(250 250 250);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 html[data-theme="dark"] {
@@ -247,6 +249,14 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
 button:not(:disabled),
 a[href] {
   cursor: pointer;
@@ -279,6 +289,10 @@ textarea {
     border-color 180ms ease,
     box-shadow 180ms ease,
     background-color 180ms ease;
+}
+
+table {
+  width: 100%;
 }
 
 select {
@@ -361,4 +375,77 @@ input[type="hidden"] {
 button:not([class]) {
   border-radius: 0.75rem;
   font-weight: 700;
+}
+
+.mobile-scroll-row {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+}
+
+.mobile-scroll-row::-webkit-scrollbar,
+.mobile-bottom-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-scroll-row > * {
+  scroll-snap-align: start;
+}
+
+@media (max-width: 767px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  .mobile-page > div {
+    width: 100%;
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+  }
+
+  .mobile-page h1 {
+    font-size: 1.35rem;
+    line-height: 1.75rem;
+  }
+
+  .mobile-page h2 {
+    line-height: 1.55rem;
+  }
+
+  .mobile-page .grid {
+    gap: 0.875rem;
+  }
+
+  .mobile-page table {
+    min-width: 42rem;
+  }
+
+  .mobile-page table,
+  .mobile-page thead,
+  .mobile-page tbody {
+    font-size: 0.875rem;
+  }
+
+  .mobile-page .overflow-x-auto,
+  .mobile-page [class*="overflow-x-auto"] {
+    border-radius: 1rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
+  select,
+  textarea {
+    min-height: 3.125rem;
+    font-size: 1rem;
+  }
+
+  button,
+  a[href] {
+    min-height: 2.75rem;
+  }
+
+  .mobile-bottom-nav {
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
 }

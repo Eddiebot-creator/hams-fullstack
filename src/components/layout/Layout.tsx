@@ -129,9 +129,9 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden pb-16 md:pb-0">
+      <main className="flex-1 flex flex-col overflow-hidden pb-[5.25rem] md:pb-0">
         {/* Mobile Header */}
-        <header className="md:hidden h-14 bg-white border-b border-neutral-200 flex items-center justify-between px-4">
+        <header className="md:hidden sticky top-0 z-40 h-14 bg-white/95 backdrop-blur border-b border-neutral-200 flex items-center justify-between px-4">
           <div className="flex items-center">
             <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-sm border border-neutral-100 overflow-hidden">
               <img
@@ -160,7 +160,7 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
         <WorkspaceAssist role={role} />
         <div
           key={location.pathname}
-          className="flex-1 overflow-auto page-enter"
+          className="flex-1 overflow-auto page-enter mobile-page"
         >
           <Outlet />
         </div>
@@ -169,7 +169,7 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
       <button
         type="button"
         onClick={() => navigate(quickAction.path)}
-        className="md:hidden fixed bottom-20 right-4 z-50 inline-flex h-14 min-w-14 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-xl shadow-indigo-600/30"
+        className="md:hidden fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-50 inline-flex h-14 min-w-14 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 text-sm font-bold text-white shadow-xl shadow-indigo-600/30"
         aria-label={quickAction.label}
       >
         <QuickIcon className="h-5 w-5" />
@@ -177,7 +177,7 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
       </button>
 
       {/* Bottom Navigation (Mobile) */}
-      <nav className="md:hidden fixed bottom-0 w-full bg-white/95 backdrop-blur border-t border-neutral-200 flex items-center h-16 px-2 z-50 overflow-x-auto">
+      <nav className="md:hidden fixed bottom-0 w-full bg-white/95 backdrop-blur border-t border-neutral-200 flex items-center h-[calc(4rem+env(safe-area-inset-bottom))] px-2 pb-[env(safe-area-inset-bottom)] z-50 overflow-x-auto mobile-bottom-nav">
         {navItems.map((item) => (
           <NavLink
             key={item.path}
