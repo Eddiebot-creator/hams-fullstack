@@ -4,6 +4,8 @@ import { Clock, Download, Edit2, Plus, Search, Trash2, UtensilsCrossed } from "l
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type Meal } from "@/src/lib/api";
+import { CardSkeleton } from "@/src/components/ui/skeleton";
+import { showToast } from "@/src/components/ui/toast";
 
 const emptyForm = {
   type: "",
@@ -15,6 +17,7 @@ const emptyForm = {
 
 export default function AdminMeals() {
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [isEditing, setIsEditing] = useState(false);
@@ -24,7 +27,7 @@ export default function AdminMeals() {
   const [form, setForm] = useState(emptyForm);
 
   useEffect(() => {
-    api.meals().then(setMeals).catch(console.error);
+    api.meals().then(setMeals).catch(console.error).finally(() => setIsLoading(false));
   }, []);
 
   const filteredMeals = useMemo(() => {
@@ -69,6 +72,7 @@ export default function AdminMeals() {
       setMeals((current) => editingId ? current.map((item) => item.id === editingId ? meal : item) : [...current, meal]);
       resetForm();
       setIsEditing(false);
+      showToast(editingId ? "Meal updated." : "Meal added.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save meal.");
     } finally {
@@ -82,6 +86,7 @@ export default function AdminMeals() {
     try {
       await api.deleteMeal(meal.id);
       setMeals((current) => current.filter((item) => item.id !== meal.id));
+      showToast("Meal deleted.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to delete meal.");
     }
@@ -211,7 +216,41 @@ export default function AdminMeals() {
             <option value="Upcoming">Upcoming</option>
           </select>
         </div>
-        <div className="overflow-x-auto">
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+        ) : (
+        <>
+        <div className="grid grid-cols-1 gap-3 p-4 md:hidden">
+          {filteredMeals.map((meal) => (
+            <div key={meal.id} className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-neutral-900">{meal.type}</p>
+                  <p className="text-sm text-neutral-500">{meal.startTime} - {meal.endTime}</p>
+                </div>
+                <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                  meal.status === 'Active' ? 'bg-green-100 text-green-800' :
+                  meal.status === 'Upcoming' ? 'bg-indigo-100 text-indigo-800' :
+                  'bg-neutral-100 text-neutral-800'
+                }`}>
+                  {meal.status}
+                </span>
+              </div>
+              <p className="text-sm text-neutral-600 mt-3">{meal.menu}</p>
+              <div className="flex gap-2 mt-4">
+                <Button size="sm" variant="outline" onClick={() => startEdit(meal)}>Edit</Button>
+                <Button size="sm" variant="destructive" onClick={() => handleDeleteMeal(meal)}>Delete</Button>
+              </div>
+            </div>
+          ))}
+          {filteredMeals.length === 0 && <p className="text-sm text-neutral-500 text-center py-8">No meals match your search.</p>}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="min-w-full divide-y divide-neutral-200">
             <thead className="bg-neutral-50">
               <tr>
@@ -255,6 +294,8 @@ export default function AdminMeals() {
             </tbody>
           </table>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

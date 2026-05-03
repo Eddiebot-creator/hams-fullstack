@@ -3,15 +3,18 @@ import { motion } from "motion/react";
 import { Download, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { api, type LaundryReports as LaundryReportsData } from "@/src/lib/api";
+import { CardSkeleton } from "@/src/components/ui/skeleton";
 
 export default function LaundryReports() {
   const [data, setData] = useState<LaundryReportsData | null>(null);
+  const [periodFilter, setPeriodFilter] = useState("All");
 
   useEffect(() => {
     api.laundryReports().then(setData).catch(console.error);
   }, []);
 
-  const weeklyReport = data?.reports[0];
+  const filteredReports = (data?.reports ?? []).filter((report) => periodFilter === "All" || report.reportPeriod === periodFilter);
+  const weeklyReport = filteredReports[0] ?? data?.reports[0];
 
   const exportCsv = () => {
     if (!data) return;
@@ -46,14 +49,27 @@ export default function LaundryReports() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-neutral-900">Reports</h1>
-        <Button variant="outline" className="flex items-center" onClick={exportCsv} disabled={!data}>
-          <Download className="w-4 h-4 mr-2" />
-          Export CSV
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <select value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value)} className="flex h-10 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+            <option value="All">All periods</option>
+            {(data?.reports ?? []).map((report) => <option key={report.id} value={report.reportPeriod}>{report.reportPeriod}</option>)}
+          </select>
+          <Button variant="outline" onClick={() => window.print()} disabled={!data}>Print</Button>
+          <Button variant="outline" className="flex items-center" onClick={exportCsv} disabled={!data}>
+            <Download className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
+      {!data ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -110,6 +126,7 @@ export default function LaundryReports() {
           </div>
         </motion.div>
       </div>
+      )}
     </div>
   );
 }

@@ -3,10 +3,11 @@ import {
   Home, QrCode, Shirt, User, 
   ScanLine, UtensilsCrossed, 
   Package, FileText, 
-  Users, BarChart3, LogOut, Bell, ShieldCheck, Columns3
+  Users, BarChart3, LogOut, Bell, ShieldCheck, Columns3, Search
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, type Notification } from "@/src/lib/api";
+import GlobalSearch from "./GlobalSearch";
 
 const navConfig = {
   student: [
@@ -76,6 +77,9 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
           <span className="ml-3 font-bold text-xl text-neutral-900 tracking-tight">HAMS</span>
         </div>
         <nav className="flex-1 px-4 py-6 space-y-1">
+          <div className="mb-4">
+            <GlobalSearch />
+          </div>
           {navItems.map((item) => (
             <NavLink
               key={item.path}
@@ -118,6 +122,9 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
             <span className="ml-2 font-bold text-lg text-neutral-900">MyAds</span>
           </div>
           <div className="flex items-center gap-3">
+            <button onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))} className="text-neutral-500 rounded-lg p-1 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+              <Search className="h-5 w-5" />
+            </button>
             <button onClick={() => navigate(role === "laundry" ? "/laundry-staff/notifications" : `/${role}/notifications`)} className="relative text-neutral-500 rounded-lg p-1 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-indigo-600" />}

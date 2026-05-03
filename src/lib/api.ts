@@ -223,6 +223,13 @@ export type UserHistory = {
   audits: AuditLog[];
 };
 
+export type GlobalSearchResults = {
+  students: Student[];
+  staff: StaffUser[];
+  baskets: LaundryBasket[];
+  meals: Meal[];
+};
+
 export const api = {
   login: (payload: { email: string; password: string; role: Role }) =>
     request<{ user: Student & { role: Role } }>("/auth/login", {
@@ -234,6 +241,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  globalSearch: (query: string) => request<GlobalSearchResults>(`/search?q=${encodeURIComponent(query)}`, { cacheMs: 5000 }),
   students: () => request<Student[]>("/students", { cacheMs: 15000 }),
   createStudent: (payload: CreateStudentPayload) =>
     request<Student>("/students", {

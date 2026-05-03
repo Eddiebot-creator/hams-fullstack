@@ -9,6 +9,7 @@ import Account from "./pages/Account";
 import Notifications from "./pages/Notifications";
 import Layout from "./components/layout/Layout";
 import { ToastViewport } from "./components/ui/toast";
+import NetworkStatus from "./components/layout/NetworkStatus";
 
 // Student Pages
 import StudentDashboard from "./pages/student/Dashboard";
@@ -45,6 +46,7 @@ export default function App() {
   return (
     <Router>
       <ToastViewport />
+      <NetworkStatus />
       <Routes>
         <Route path="/login" element={<Login />} />
         

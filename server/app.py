@@ -594,6 +594,56 @@ def create_app():
             return jsonify({"ok": False, "database": "mysql" if IS_MYSQL else "sqlite", "message": DB_INIT_ERROR}), 500
         return jsonify({"ok": True, "database": "mysql" if IS_MYSQL else "sqlite", "summary": database_counts()})
 
+    @app.get("/api/search")
+    def global_search():
+        query = request.args.get("q", "").strip()
+        if len(query) < 2:
+            return jsonify({"students": [], "staff": [], "baskets": [], "meals": []})
+
+        like_query = f"%{query}%"
+        students_rows = query_all(
+            """
+            SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, status
+            FROM users
+            WHERE role = 'student' AND (name LIKE ? OR email LIKE ? OR student_id LIKE ? OR hostel LIKE ?)
+            ORDER BY name
+            LIMIT 8
+            """,
+            (like_query, like_query, like_query, like_query),
+        )
+        staff_rows = query_all(
+            """
+            SELECT id, name, email, role, status
+            FROM users
+            WHERE role IN ('kitchen', 'laundry', 'admin') AND (name LIKE ? OR email LIKE ? OR role LIKE ?)
+            ORDER BY name
+            LIMIT 8
+            """,
+            (like_query, like_query, like_query),
+        )
+        baskets = query_all(
+            """
+            SELECT id, basket_code AS basketCode, student_id AS studentId, status,
+                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+            FROM laundry_baskets
+            WHERE basket_code LIKE ? OR student_id LIKE ? OR status LIKE ?
+            ORDER BY id DESC
+            LIMIT 8
+            """,
+            (like_query, like_query, like_query),
+        )
+        meals_rows = query_all(
+            """
+            SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status
+            FROM meals
+            WHERE type LIKE ? OR menu LIKE ? OR status LIKE ?
+            ORDER BY id
+            LIMIT 8
+            """,
+            (like_query, like_query, like_query),
+        )
+        return jsonify({"students": students_rows, "staff": staff_rows, "baskets": baskets, "meals": meals_rows})
+
     @app.post("/api/auth/login")
     def login():
         payload = request.get_json(silent=True) or {}
