@@ -250,8 +250,8 @@ export default function AdminStudents() {
       )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden">
-        <div className="p-6 border-b border-neutral-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="relative w-full max-w-md">
+        <div className="p-4 sm:p-6 border-b border-neutral-100 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(18rem,32rem)_minmax(14rem,18rem)] lg:items-end lg:justify-between">
+          <div className="relative w-full">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-neutral-400" />
             </div>

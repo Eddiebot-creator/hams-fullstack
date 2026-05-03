@@ -43,7 +43,7 @@ export default function LaundryIssues() {
         <p className="text-sm text-neutral-500 mt-1">Record damaged, missing, delayed, or special-case laundry problems.</p>
       </div>
 
-      <form onSubmit={submit} className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-5 grid grid-cols-1 md:grid-cols-4 gap-3">
+      <form onSubmit={submit} className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-4 sm:p-5 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(13rem,18rem)_minmax(13rem,18rem)_minmax(16rem,1fr)_auto] lg:items-end">
         <SelectMenu value={form.basketId} onChange={(value) => setForm({ ...form, basketId: value })} label="Basket" className="min-w-0" options={[
           { value: "", label: "Select basket", description: "Choose record" },
           ...baskets.map((basket) => ({ value: String(basket.id), label: `#${basket.basketCode}`, description: basket.studentId })),
@@ -54,8 +54,11 @@ export default function LaundryIssues() {
           { value: "Delayed basket", label: "Delayed basket", description: "Taking too long" },
           { value: "Wrong basket", label: "Wrong basket", description: "Mismatch found" },
         ]} />
-        <Input value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Issue notes" />
-        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white"><AlertTriangle className="w-4 h-4" /> Save Issue</Button>
+        <label className="space-y-1">
+          <span className="text-xs font-bold uppercase tracking-wide text-neutral-500">Notes</span>
+          <Input value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Issue notes" />
+        </label>
+        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white lg:w-auto lg:px-7"><AlertTriangle className="w-4 h-4" /> Save Issue</Button>
       </form>
 
       <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm divide-y divide-neutral-100">

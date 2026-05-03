@@ -88,8 +88,8 @@ export default function AdminStaff() {
         </motion.form>
       )}
 
-      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-4 flex flex-col sm:flex-row gap-3">
-        <div className="relative w-full max-w-md">
+      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(18rem,32rem)_minmax(14rem,18rem)] lg:items-end">
+        <div className="relative w-full">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search className="h-4 w-4 text-neutral-400" />
           </div>
