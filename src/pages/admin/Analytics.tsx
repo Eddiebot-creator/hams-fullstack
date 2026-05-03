@@ -81,6 +81,38 @@ export default function AdminAnalytics() {
             ))}
           </div>
         </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-100">
+          <h2 className="text-lg font-semibold text-neutral-900 mb-4">Student Status</h2>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-green-50 border border-green-100 p-4">
+              <p className="text-sm text-green-700 font-medium">Active</p>
+              <p className="text-3xl font-bold text-green-900">{data?.studentStatus?.active ?? 0}</p>
+            </div>
+            <div className="rounded-xl bg-red-50 border border-red-100 p-4">
+              <p className="text-sm text-red-700 font-medium">Inactive</p>
+              <p className="text-3xl font-bold text-red-900">{data?.studentStatus?.inactive ?? 0}</p>
+            </div>
+          </div>
+          <div className="mt-4 rounded-xl bg-yellow-50 border border-yellow-100 p-4">
+            <p className="text-sm text-yellow-700 font-medium">Unresolved laundry issues</p>
+            <p className="text-3xl font-bold text-yellow-900">{data?.unresolvedIssues ?? 0}</p>
+          </div>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-100">
+          <h2 className="text-lg font-semibold text-neutral-900 mb-4">Laundry Volume</h2>
+          <div className="space-y-3">
+            {(data?.laundryVolume ?? []).map((item) => (
+              <div key={item.status}>
+                <div className="flex justify-between text-sm mb-1"><span>{item.status}</span><span>{item.count}</span></div>
+                <div className="h-2 rounded-full bg-neutral-100 overflow-hidden">
+                  <div className="h-full bg-indigo-600" style={{ width: `${Math.min(100, item.count * 12)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
       </div>
     </div>
   );

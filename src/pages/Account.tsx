@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from "react";
-import { KeyRound, Phone, UserRound } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { Bell, ImagePlus, KeyRound, Phone, Settings, UserRound } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { PasswordInput } from "@/src/components/ui/password-input";
-import { api } from "@/src/lib/api";
+import { api, type UserPreferences } from "@/src/lib/api";
+import { showToast } from "@/src/components/ui/toast";
 
 export default function Account() {
   const storedUser = JSON.parse(localStorage.getItem("hamsUser") || "{}");
@@ -15,6 +16,18 @@ export default function Account() {
     room: storedUser.room || "",
   });
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "" });
+  const [photoPreview, setPhotoPreview] = useState(storedUser.photoUrl || "");
+  const [preferences, setPreferences] = useState<UserPreferences>({
+    theme: "system",
+    dashboardLayout: "comfortable",
+    tableFilters: {},
+    lastSelectedMeal: null,
+    notificationSettings: { laundry: true, meals: true, password: true, admin: true },
+  });
+
+  useEffect(() => {
+    api.preferences().then(setPreferences).catch(console.error);
+  }, []);
 
   const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
@@ -25,6 +38,32 @@ export default function Account() {
       setMessage("Profile updated.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Unable to update profile.");
+    }
+  };
+
+  const savePhoto = async (file: File) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const photoUrl = String(reader.result);
+        const updated = await api.updatePhoto(storedUser.id, { photoUrl });
+        localStorage.setItem("hamsUser", JSON.stringify(updated));
+        setPhotoPreview(photoUrl);
+        showToast("Profile photo saved.");
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Unable to save photo.", "error");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const savePreferences = async () => {
+    try {
+      const saved = await api.savePreferences(preferences);
+      setPreferences(saved);
+      showToast("Preferences saved.");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Unable to save preferences.", "error");
     }
   };
 
@@ -48,6 +87,23 @@ export default function Account() {
       </div>
 
       {message && <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-800">{message}</div>}
+
+      <section className="bg-white rounded-2xl shadow-sm border border-neutral-100 p-6 space-y-5">
+        <div className="flex items-center gap-4">
+          <div className="w-20 h-20 rounded-2xl bg-neutral-100 border border-neutral-200 overflow-hidden flex items-center justify-center">
+            {photoPreview ? <img src={photoPreview} alt="" className="w-full h-full object-cover" /> : <UserRound className="w-8 h-8 text-neutral-400" />}
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-neutral-900">Profile Photo</h2>
+            <p className="text-sm text-neutral-500">Used on profile cards and scanner identity checks.</p>
+            <label className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-indigo-700 hover:text-indigo-900 cursor-pointer">
+              <ImagePlus className="w-4 h-4" />
+              Upload photo
+              <input type="file" accept="image/*" className="hidden" onChange={(event) => event.target.files?.[0] && savePhoto(event.target.files[0])} />
+            </label>
+          </div>
+        </div>
+      </section>
 
       <form onSubmit={saveProfile} className="bg-white rounded-2xl shadow-sm border border-neutral-100 p-6 space-y-5">
         <div className="flex items-center gap-3">
@@ -85,6 +141,39 @@ export default function Account() {
         </div>
         <Button type="submit" variant="outline">Update Password</Button>
       </form>
+
+      <section className="bg-white rounded-2xl shadow-sm border border-neutral-100 p-6 space-y-5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+            <Settings className="w-5 h-5 text-indigo-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-neutral-900">Saved Preferences</h2>
+            <p className="text-sm text-neutral-500">These settings are saved to your user account.</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <select value={preferences.theme} onChange={(event) => setPreferences({ ...preferences, theme: event.target.value as UserPreferences["theme"] })} className="h-10 rounded-md border border-neutral-200 bg-white px-3 text-sm">
+            <option value="system">System theme</option>
+            <option value="light">Light theme</option>
+            <option value="dark">Dark theme</option>
+          </select>
+          <select value={preferences.dashboardLayout} onChange={(event) => setPreferences({ ...preferences, dashboardLayout: event.target.value as UserPreferences["dashboardLayout"] })} className="h-10 rounded-md border border-neutral-200 bg-white px-3 text-sm">
+            <option value="comfortable">Comfortable layout</option>
+            <option value="compact">Compact layout</option>
+          </select>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {["laundry", "meals", "password", "admin"].map((key) => (
+            <label key={key} className="flex items-center gap-3 rounded-xl border border-neutral-100 bg-neutral-50 p-3 text-sm font-medium capitalize">
+              <input type="checkbox" checked={preferences.notificationSettings[key] ?? true} onChange={(event) => setPreferences({ ...preferences, notificationSettings: { ...preferences.notificationSettings, [key]: event.target.checked } })} />
+              <Bell className="w-4 h-4 text-neutral-500" />
+              {key} notifications
+            </label>
+          ))}
+        </div>
+        <Button type="button" onClick={savePreferences} variant="outline">Save Preferences</Button>
+      </section>
     </div>
   );
 }

@@ -49,7 +49,7 @@ export default function AdminStudents() {
       }),
     [search, statusFilter, students]
   );
-  const pagedStudents = paginate(filteredStudents, page, 8);
+  const pagedStudents = paginate<Student>(filteredStudents, page, 8);
 
   const updateForm = (field: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));

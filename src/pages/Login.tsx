@@ -45,8 +45,9 @@ export default function Login() {
     setError("");
 
     try {
-      const { user } = await api.login({ email, password, role });
+      const { user, token } = await api.login({ email, password, role });
       localStorage.setItem("hamsUser", JSON.stringify(user));
+      localStorage.setItem("hamsToken", token);
       showToast(`Welcome, ${user.name}.`);
       navigate(destinations[role]);
     } catch (err) {

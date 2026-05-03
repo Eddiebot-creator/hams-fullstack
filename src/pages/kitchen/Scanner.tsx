@@ -13,6 +13,7 @@ export default function KitchenScanner() {
   const [mealId, setMealId] = useState(2);
   const [student, setStudent] = useState<Student | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [lateReason, setLateReason] = useState("");
 
   useEffect(() => {
     api.meals().then((items) => {
@@ -32,7 +33,7 @@ export default function KitchenScanner() {
     setIsScanning(true);
     setStudent(null);
     try {
-      const result = await api.scanMeal(mealId, studentId.trim());
+      const result = await api.scanMeal(mealId, studentId.trim(), lateReason.trim() || undefined);
       setStudent(result.student);
       setScanMessage(`${result.meal.type} approved for Student ID: ${result.studentId}`);
       setScanStatus("success");
@@ -95,6 +96,10 @@ export default function KitchenScanner() {
                   ))}
                 </select>
               </label>
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700">Late/override reason</span>
+                <Input value={lateReason} onChange={(event) => setLateReason(event.target.value)} placeholder="Required if meal is not active" />
+              </label>
             </div>
             <div className="flex justify-center">
               <Button onClick={simulateScan} disabled={isScanning} className="bg-indigo-600 hover:bg-indigo-700 text-white">
@@ -116,7 +121,9 @@ export default function KitchenScanner() {
             {student && (
               <div className="mt-4 grid grid-cols-1 gap-2 w-full text-left">
                 <div className="flex items-center gap-3 rounded-lg bg-white/70 p-3">
-                  <UserRound className="w-5 h-5 text-green-600" />
+                  <div className="w-10 h-10 rounded-full bg-green-100 overflow-hidden flex items-center justify-center">
+                    {student.photoUrl ? <img src={student.photoUrl} alt="" className="w-full h-full object-cover" /> : <UserRound className="w-5 h-5 text-green-600" />}
+                  </div>
                   <div>
                     <p className="text-sm font-semibold text-neutral-900">{student.name}</p>
                     <p className="text-xs text-neutral-500 font-mono">{student.studentId}</p>

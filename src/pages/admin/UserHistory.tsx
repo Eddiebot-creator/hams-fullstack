@@ -1,20 +1,24 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Bell, KeyRound, Shirt, UtensilsCrossed, UserRound } from "lucide-react";
+import { Bell, KeyRound, ListChecks, Shirt, UtensilsCrossed, UserRound } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { PasswordInput } from "@/src/components/ui/password-input";
 import { CardSkeleton } from "@/src/components/ui/skeleton";
 import { showToast } from "@/src/components/ui/toast";
-import { api, type UserHistory } from "@/src/lib/api";
+import { api, type TimelineEvent, type UserHistory } from "@/src/lib/api";
 
 export default function AdminUserHistory() {
   const { id } = useParams();
   const userId = Number(id);
   const [history, setHistory] = useState<UserHistory | null>(null);
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [newPassword, setNewPassword] = useState("password");
 
   useEffect(() => {
-    if (userId) api.userHistory(userId).then(setHistory).catch(console.error);
+    if (userId) {
+      api.userHistory(userId).then(setHistory).catch(console.error);
+      api.userTimeline(userId).then((data) => setTimeline(data.events)).catch(console.error);
+    }
   }, [userId]);
 
   const resetPassword = async () => {
@@ -100,6 +104,21 @@ export default function AdminUserHistory() {
           </div>
         </section>
       </div>
+
+      <section className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-5">
+        <h2 className="font-semibold text-neutral-900 flex items-center gap-2 mb-4"><ListChecks className="w-5 h-5 text-indigo-600" /> Full Activity Timeline</h2>
+        <div className="space-y-3">
+          {timeline.length === 0 ? <p className="text-sm text-neutral-500">No timeline activity yet.</p> : timeline.map((event, index) => (
+            <div key={`${event.type}-${index}`} className="rounded-xl bg-neutral-50 border border-neutral-100 p-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                <p className="font-medium text-neutral-900">{event.title}</p>
+                <p className="text-xs text-neutral-400">{event.createdAt}</p>
+              </div>
+              {event.detail && <p className="text-sm text-neutral-500 mt-1">{event.detail}</p>}
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

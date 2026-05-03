@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
-import { User, Mail, Phone, Building, ShieldCheck, Bell } from "lucide-react";
+import { User, Mail, Phone, Building, ShieldCheck, Bell, ImagePlus } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { PasswordInput } from "@/src/components/ui/password-input";
@@ -63,6 +63,18 @@ export default function Profile() {
     setNotifications((current) => current.map((item) => ({ ...item, isRead: 1 })));
   };
 
+  const savePhoto = (file: File) => {
+    if (!student) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const updated = await api.updatePhoto(student.id, { photoUrl: String(reader.result) });
+      setStudent(updated);
+      localStorage.setItem("hamsUser", JSON.stringify(updated));
+      setMessage("Profile photo updated.");
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -76,8 +88,8 @@ export default function Profile() {
       >
         <div className="h-32 bg-indigo-600 relative">
           <div className="absolute -bottom-12 left-8 w-24 h-24 bg-white rounded-full p-1 shadow-md">
-            <div className="w-full h-full bg-indigo-100 rounded-full flex items-center justify-center">
-              <User className="w-10 h-10 text-indigo-600" />
+            <div className="w-full h-full bg-indigo-100 rounded-full flex items-center justify-center overflow-hidden">
+              {student?.photoUrl ? <img src={student.photoUrl} alt="" className="w-full h-full object-cover" /> : <User className="w-10 h-10 text-indigo-600" />}
             </div>
           </div>
         </div>
@@ -87,6 +99,11 @@ export default function Profile() {
             <div>
               <h2 className="text-2xl font-bold text-neutral-900">{student?.name || "Student"}</h2>
               <p className="text-neutral-500 font-medium">{student ? `${student.course}, ${student.level}` : "Loading profile"}</p>
+              <label className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-indigo-700 cursor-pointer">
+                <ImagePlus className="w-4 h-4" />
+                Upload photo
+                <input type="file" accept="image/*" className="hidden" onChange={(event) => event.target.files?.[0] && savePhoto(event.target.files[0])} />
+              </label>
             </div>
             <Button variant="outline" size="sm" onClick={() => setIsEditing((value) => !value)}>{isEditing ? "Close" : "Edit Profile"}</Button>
           </div>

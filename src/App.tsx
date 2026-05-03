@@ -11,6 +11,7 @@ import NetworkStatus from "./components/layout/NetworkStatus";
 import { CardSkeleton } from "./components/ui/skeleton";
 
 const Login = lazy(() => import("./pages/Login"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Account = lazy(() => import("./pages/Account"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 
@@ -27,6 +28,7 @@ const LaundryBaskets = lazy(() => import("./pages/laundry/Baskets"));
 const LaundryBoard = lazy(() => import("./pages/laundry/Board"));
 const LaundryReports = lazy(() => import("./pages/laundry/Reports"));
 const LaundryScanner = lazy(() => import("./pages/laundry/Scanner"));
+const LaundryIssues = lazy(() => import("./pages/laundry/Issues"));
 
 const AdminDashboard = lazy(() => import("./pages/admin/Dashboard"));
 const AdminMeals = lazy(() => import("./pages/admin/Meals"));
@@ -35,6 +37,8 @@ const AdminAnalytics = lazy(() => import("./pages/admin/Analytics"));
 const AdminStaff = lazy(() => import("./pages/admin/Staff"));
 const AdminAudit = lazy(() => import("./pages/admin/Audit"));
 const AdminUserHistory = lazy(() => import("./pages/admin/UserHistory"));
+const AdminApprovals = lazy(() => import("./pages/admin/Approvals"));
+const AdminTools = lazy(() => import("./pages/admin/Tools"));
 
 function PageLoader() {
   return (
@@ -48,7 +52,8 @@ function PageLoader() {
 
 function ProtectedLayout({ role }: { role: "student" | "kitchen" | "laundry" | "admin" }) {
   const user = JSON.parse(localStorage.getItem("hamsUser") || "{}");
-  return user.role === role ? <Layout role={role} /> : <Navigate to="/login" replace />;
+  const token = localStorage.getItem("hamsToken");
+  return token && user.role === role ? <Layout role={role} /> : <Navigate to="/login" replace />;
 }
 
 export default function App() {
@@ -59,6 +64,7 @@ export default function App() {
       <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         
         {/* Student Routes */}
         <Route path="/student" element={<ProtectedLayout role="student" />}>
@@ -83,6 +89,7 @@ export default function App() {
           <Route path="baskets" element={<LaundryBaskets />} />
           <Route path="board" element={<LaundryBoard />} />
           <Route path="reports" element={<LaundryReports />} />
+          <Route path="issues" element={<LaundryIssues />} />
           <Route path="scanner" element={<LaundryScanner />} />
           <Route path="account" element={<Account />} />
           <Route path="notifications" element={<Notifications />} />
@@ -97,6 +104,8 @@ export default function App() {
           <Route path="staff" element={<AdminStaff />} />
           <Route path="analytics" element={<AdminAnalytics />} />
           <Route path="audit" element={<AdminAudit />} />
+          <Route path="approvals" element={<AdminApprovals />} />
+          <Route path="tools" element={<AdminTools />} />
           <Route path="account" element={<Account />} />
           <Route path="notifications" element={<Notifications />} />
         </Route>

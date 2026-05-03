@@ -20,6 +20,7 @@ async function fetchJson<T>(path: string, options: RequestInit, retries: number,
         ...options,
         headers: {
           "Content-Type": "application/json",
+          ...(localStorage.getItem("hamsToken") ? { Authorization: `Bearer ${localStorage.getItem("hamsToken")}` } : {}),
           ...options.headers,
         },
         signal: controller.signal,
@@ -31,6 +32,10 @@ async function fetchJson<T>(path: string, options: RequestInit, retries: number,
         if (shouldRetry) {
           await wait(350 * (attempt + 1));
           continue;
+        }
+        if (response.status === 401) {
+          localStorage.removeItem("hamsToken");
+          localStorage.removeItem("hamsUser");
         }
         throw new Error(error.message ?? "Request failed.");
       }
@@ -98,6 +103,7 @@ export type Student = {
   course: string;
   level: string;
   phone: string;
+  photoUrl?: string;
   status: string;
 };
 
@@ -252,6 +258,10 @@ export type AdminAnalytics = {
   mealTrends: Array<{ id: number; dayLabel: string; attendanceCount: number }>;
   machineUtilizationAverage: number;
   kpis: Array<{ id: number; name: string; value: string; delta: string }>;
+  studentStatus?: { active: number; inactive: number };
+  laundryVolume?: Array<{ status: string; count: number }>;
+  unresolvedIssues?: number;
+  peakScans?: Array<{ label: string; count: number }>;
 };
 
 export type AdminControlCenter = {
@@ -268,6 +278,55 @@ export type UserHistory = {
   audits: AuditLog[];
 };
 
+export type Paginated<T> = {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export type UserPreferences = {
+  theme: "system" | "light" | "dark";
+  dashboardLayout: "comfortable" | "compact";
+  tableFilters: Record<string, unknown>;
+  lastSelectedMeal: number | null;
+  notificationSettings: Record<string, boolean>;
+};
+
+export type LaundryIssue = {
+  id: number;
+  basketId: number;
+  basketCode: string;
+  studentId: string;
+  issueType: string;
+  notes: string;
+  status: string;
+  reportedBy: string;
+  createdAt: string;
+  resolvedAt: string | null;
+};
+
+export type ApprovalRequest = {
+  id: number;
+  requestType: string;
+  entityType: string;
+  entityRef: string | null;
+  requestedBy: string;
+  status: string;
+  notes: string | null;
+  createdAt: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+};
+
+export type TimelineEvent = {
+  type: string;
+  title: string;
+  detail: string | null;
+  createdAt: string;
+};
+
 export type GlobalSearchResults = {
   students: Student[];
   staff: StaffUser[];
@@ -277,7 +336,7 @@ export type GlobalSearchResults = {
 
 export const api = {
   login: (payload: { email: string; password: string; role: Role }) =>
-    request<{ user: Student & { role: Role } }>("/auth/login", {
+    request<{ user: Student & { role: Role }; token: string }>("/auth/login", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
@@ -286,8 +345,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  resetPasswordWithToken: (payload: { token: string; newPassword: string }) =>
+    request<{ message: string }>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   globalSearch: (query: string) => request<GlobalSearchResults>(`/search?q=${encodeURIComponent(query)}`, { cacheMs: 5000 }),
   students: () => request<Student[]>("/students", { cacheMs: 15000 }),
+  studentsPage: (params: { page: number; pageSize?: number; search?: string; status?: string }) =>
+    request<Paginated<Student>>(`/students?page=${params.page}&pageSize=${params.pageSize ?? 20}&search=${encodeURIComponent(params.search ?? "")}&status=${encodeURIComponent(params.status ?? "All")}`, { cacheMs: 8000 }),
   createStudent: (payload: CreateStudentPayload) =>
     request<Student>("/students", {
       method: "POST",
@@ -313,6 +379,17 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
+  updatePhoto: (id: number, payload: { photoUrl: string }) =>
+    request<Student & { role: Role }>(`/users/${id}/photo`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  preferences: () => request<UserPreferences>("/users/me/preferences", { cacheMs: 5000 }),
+  savePreferences: (payload: UserPreferences) =>
+    request<UserPreferences>("/users/me/preferences", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
   changePassword: (id: number, payload: { currentPassword: string; newPassword: string }) =>
     request<{ message: string }>(`/users/${id}/password`, {
       method: "POST",
@@ -324,6 +401,7 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   userHistory: (id: number) => request<UserHistory>(`/users/${id}/history`, { cacheMs: 8000 }),
+  userTimeline: (id: number) => request<{ user: Student & { role: Role }; events: TimelineEvent[] }>(`/users/${id}/timeline`, { cacheMs: 8000 }),
   meals: () => request<Meal[]>("/meals", { cacheMs: 15000 }),
   createMeal: (payload: CreateMealPayload) =>
     request<Meal>("/meals", {
@@ -340,6 +418,8 @@ export const api = {
       method: "DELETE",
     }),
   laundryBaskets: () => request<LaundryBasket[]>("/laundry/baskets", { cacheMs: 10000 }),
+  laundryBasketsPage: (params: { page: number; pageSize?: number; search?: string; status?: string }) =>
+    request<Paginated<LaundryBasket>>(`/laundry/baskets?page=${params.page}&pageSize=${params.pageSize ?? 20}&search=${encodeURIComponent(params.search ?? "")}&status=${encodeURIComponent(params.status ?? "All")}`, { cacheMs: 8000 }),
   createLaundryBasket: (payload: CreateLaundryBasketPayload) =>
     request<LaundryBasket>("/laundry/baskets", {
       method: "POST",
@@ -360,6 +440,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  laundryIssues: (params?: { page?: number; status?: string }) =>
+    request<Paginated<LaundryIssue>>(`/laundry/issues?page=${params?.page ?? 1}&status=${encodeURIComponent(params?.status ?? "All")}`, { cacheMs: 8000 }),
+  createLaundryIssue: (payload: { basketId: number; issueType: string; notes?: string }) =>
+    request<LaundryIssue>("/laundry/issues", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateLaundryIssue: (id: number, payload: { status: "Open" | "Resolved" }) =>
+    request<{ message: string }>(`/laundry/issues/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
   deleteLaundryBasket: (id: number) =>
     request<{ message: string }>(`/laundry/baskets/${id}`, {
       method: "DELETE",
@@ -376,6 +468,8 @@ export const api = {
     }),
   notifications: (role: Role, studentId?: string) =>
     request<Notification[]>(`/notifications?role=${role}${studentId ? `&studentId=${studentId}` : ""}`, { cacheMs: 5000 }),
+  notificationsPage: (params: { role: Role; studentId?: string; page: number; pageSize?: number }) =>
+    request<Paginated<Notification>>(`/notifications?role=${params.role}${params.studentId ? `&studentId=${params.studentId}` : ""}&page=${params.page}&pageSize=${params.pageSize ?? 20}`, { cacheMs: 5000 }),
   markNotificationRead: (id: number) =>
     request<{ message: string }>(`/notifications/${id}/read`, {
       method: "PATCH",
@@ -386,12 +480,27 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   auditLogs: () => request<AuditLog[]>("/audit-logs", { cacheMs: 10000 }),
+  auditLogsPage: (params: { page: number; pageSize?: number; search?: string }) =>
+    request<Paginated<AuditLog>>(`/audit-logs?page=${params.page}&pageSize=${params.pageSize ?? 20}&search=${encodeURIComponent(params.search ?? "")}`, { cacheMs: 8000 }),
+  approvals: (params?: { page?: number; status?: string }) =>
+    request<Paginated<ApprovalRequest>>(`/admin/approvals?page=${params?.page ?? 1}&status=${encodeURIComponent(params?.status ?? "Pending")}`, { cacheMs: 8000 }),
+  decideApproval: (id: number, payload: { status: "Approved" | "Rejected" }) =>
+    request<{ message: string }>(`/admin/approvals/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  importStudents: (payload: { csv: string; defaultPassword?: string }) =>
+    request<{ message: string; created: number; skipped: number }>("/admin/import/students", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  backupUrl: () => `${API_BASE_URL}/database/backup`,
   adminAnalytics: () => request<AdminAnalytics>("/admin/analytics", { cacheMs: 20000 }),
   exportUrl: (kind: "students" | "meals" | "baskets" | "audits") => `${API_BASE_URL}/export/${kind}`,
   studentOverview: (studentId: string) => request<StudentOverview>(`/student/${studentId}/overview`, { cacheMs: 8000 }),
-  scanMeal: (mealId: number, studentId: string) =>
+  scanMeal: (mealId: number, studentId: string, lateReason?: string) =>
     request<{ message: string; studentId: string; meal: Meal; student: Student }>(`/meals/${mealId}/scan`, {
       method: "POST",
-      body: JSON.stringify({ studentId }),
+      body: JSON.stringify({ studentId, lateReason }),
     }),
 };

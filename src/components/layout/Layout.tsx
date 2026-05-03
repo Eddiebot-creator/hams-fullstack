@@ -3,7 +3,7 @@ import {
   Home, QrCode, Shirt, User, 
   ScanLine, UtensilsCrossed, 
   Package, FileText, 
-  Users, BarChart3, LogOut, Bell, ShieldCheck, Columns3, Search
+  Users, BarChart3, LogOut, Bell, ShieldCheck, Columns3, Search, AlertTriangle, Database, CheckSquare
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, type Notification } from "@/src/lib/api";
@@ -28,6 +28,7 @@ const navConfig = {
     { name: "Baskets", path: "/laundry-staff/baskets", icon: Package },
     { name: "Board", path: "/laundry-staff/board", icon: Columns3 },
     { name: "Reports", path: "/laundry-staff/reports", icon: FileText },
+    { name: "Issues", path: "/laundry-staff/issues", icon: AlertTriangle },
     { name: "Scanner", path: "/laundry-staff/scanner", icon: ScanLine },
     { name: "Updates", path: "/laundry-staff/notifications", icon: Bell },
     { name: "Account", path: "/laundry-staff/account", icon: User },
@@ -38,7 +39,9 @@ const navConfig = {
     { name: "Students", path: "/admin/students", icon: Users },
     { name: "Staff", path: "/admin/staff", icon: User },
     { name: "Analytics", path: "/admin/analytics", icon: BarChart3 },
+    { name: "Approvals", path: "/admin/approvals", icon: CheckSquare },
     { name: "Audit", path: "/admin/audit", icon: ShieldCheck },
+    { name: "Tools", path: "/admin/tools", icon: Database },
     { name: "Updates", path: "/admin/notifications", icon: Bell },
     { name: "Account", path: "/admin/account", icon: User },
   ]
@@ -58,6 +61,7 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
 
   const signOut = () => {
     localStorage.removeItem("hamsUser");
+    localStorage.removeItem("hamsToken");
     navigate("/login");
   };
 
