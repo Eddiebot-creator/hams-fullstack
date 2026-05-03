@@ -2,14 +2,63 @@ const API_BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
 const cache = new Map<string, { expiresAt: number; value: unknown }>();
 const pending = new Map<string, Promise<unknown>>();
 
-async function request<T>(path: string, options?: RequestInit & { cacheMs?: number }): Promise<T> {
-  const method = options?.method ?? "GET";
+type ApiRequestOptions = RequestInit & {
+  cacheMs?: number;
+  retry?: number;
+  timeoutMs?: number;
+};
+
+const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+async function fetchJson<T>(path: string, options: RequestInit, retries: number, timeoutMs: number): Promise<T> {
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          ...options.headers,
+        },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: "Request failed." }));
+        const shouldRetry = response.status >= 500 && attempt < retries;
+        if (shouldRetry) {
+          await wait(350 * (attempt + 1));
+          continue;
+        }
+        throw new Error(error.message ?? "Request failed.");
+      }
+
+      return response.json() as Promise<T>;
+    } catch (error) {
+      const canRetry = attempt < retries;
+      if (!canRetry) throw error;
+      await wait(350 * (attempt + 1));
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+
+  throw new Error("Request failed.");
+}
+
+async function request<T>(path: string, options?: ApiRequestOptions): Promise<T> {
+  const { cacheMs = 0, retry, timeoutMs = 12000, ...fetchOptions } = options ?? {};
+  const method = fetchOptions.method ?? "GET";
   const cacheKey = `${method}:${path}`;
-  const cacheMs = options?.cacheMs ?? 0;
+  const requestRetries = retry ?? (method === "GET" ? 1 : 0);
+
   if (method !== "GET") {
     cache.clear();
     pending.clear();
   }
+
   if (method === "GET" && cacheMs > 0) {
     const cached = cache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.value as T;
@@ -17,28 +66,24 @@ async function request<T>(path: string, options?: RequestInit & { cacheMs?: numb
     if (active) return active as Promise<T>;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-    ...options,
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: "Request failed." }));
-    throw new Error(error.message ?? "Request failed.");
-  }
-
-  const promise = response.json() as Promise<T>;
+  const promise = fetchJson<T>(path, fetchOptions, requestRetries, timeoutMs);
   if (method === "GET" && cacheMs > 0) {
     pending.set(cacheKey, promise);
-    promise.then((value) => {
-      cache.set(cacheKey, { expiresAt: Date.now() + cacheMs, value });
-      pending.delete(cacheKey);
-    }).catch(() => pending.delete(cacheKey));
   }
-  return promise;
+
+  try {
+    const value = await promise;
+    if (method === "GET" && cacheMs > 0) {
+      cache.set(cacheKey, { expiresAt: Date.now() + cacheMs, value });
+    }
+    return value;
+  } catch (error) {
+    const stale = cache.get(cacheKey);
+    if (method === "GET" && stale) return stale.value as T;
+    throw error;
+  } finally {
+    pending.delete(cacheKey);
+  }
 }
 
 export type Role = "student" | "kitchen" | "laundry" | "admin";
