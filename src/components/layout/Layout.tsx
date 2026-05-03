@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { api, type Notification } from "@/src/lib/api";
 import GlobalSearch from "./GlobalSearch";
 import RoleTips from "./RoleTips";
+import WorkspaceAssist from "./WorkspaceAssist";
 
 const navConfig = {
   student: [
@@ -156,6 +157,7 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
         </header>
 
         <RoleTips role={role} />
+        <WorkspaceAssist role={role} />
         <div
           key={location.pathname}
           className="flex-1 overflow-auto page-enter"
