@@ -39,7 +39,6 @@ textarea {
     background-color 180ms ease;
 }
 
-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
 select {
   padding-inline: 1rem;
 }
