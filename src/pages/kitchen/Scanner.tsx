@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { IdCard, ScanLine, CheckCircle2, XCircle, UserRound, Building2, BookOpen } from "lucide-react";
+import { IdCard, CheckCircle2, XCircle, UserRound, Building2, BookOpen } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type Meal, type Student } from "@/src/lib/api";
+import CameraQrScanner from "@/src/components/scanner/CameraQrScanner";
 
 export default function KitchenScanner() {
   const [scanStatus, setScanStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -23,8 +24,9 @@ export default function KitchenScanner() {
     }).catch(console.error);
   }, []);
 
-  const simulateScan = async () => {
-    if (!studentId.trim()) {
+  const verifyStudent = async (id = studentId) => {
+    const cleanId = id.trim();
+    if (!cleanId) {
       setScanMessage("Enter a student ID before scanning.");
       setScanStatus("error");
       return;
@@ -33,7 +35,7 @@ export default function KitchenScanner() {
     setIsScanning(true);
     setStudent(null);
     try {
-      const result = await api.scanMeal(mealId, studentId.trim(), lateReason.trim() || undefined);
+      const result = await api.scanMeal(mealId, cleanId, lateReason.trim() || undefined);
       setStudent(result.student);
       setScanMessage(`${result.meal.type} approved for Student ID: ${result.studentId}`);
       setScanStatus("success");
@@ -49,6 +51,11 @@ export default function KitchenScanner() {
     setTimeout(() => setScanStatus('idle'), 5000);
   };
 
+  const handleQrDetected = (id: string) => {
+    setStudentId(id);
+    void verifyStudent(id);
+  };
+
   return (
     <div className="p-3 sm:p-6 lg:p-8 max-w-lg mx-auto space-y-4 flex flex-col items-center justify-center min-h-[calc(100vh-8rem)]">
       <motion.div
@@ -61,17 +68,8 @@ export default function KitchenScanner() {
         <h1 className="text-2xl font-bold text-neutral-900 mb-2 mt-4">Meal Scanner</h1>
         <p className="text-neutral-500 mb-8">Scan student QR code to mark meal as taken</p>
         
-        <div className="relative w-full max-w-72 aspect-square mx-auto mb-6 bg-neutral-900 rounded-3xl overflow-hidden shadow-inner flex items-center justify-center">
-          {/* Simulated Camera View */}
-          <div className="absolute inset-0 border-4 border-indigo-500/30 m-4 rounded-xl pointer-events-none"></div>
-          <ScanLine className="w-16 h-16 text-indigo-500/50 animate-pulse" />
-          
-          {/* Scanning animation line */}
-          <motion.div 
-            animate={{ y: [-120, 120, -120] }}
-            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-            className="absolute top-1/2 left-4 right-4 h-0.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,1)] z-10"
-          />
+        <div className="mb-6">
+          <CameraQrScanner label="Camera QR meal scanner" onDetected={handleQrDetected} />
         </div>
 
         {scanStatus === 'idle' && (
@@ -104,7 +102,7 @@ export default function KitchenScanner() {
               </label>
             </div>
             <div className="flex justify-center">
-              <Button onClick={simulateScan} disabled={isScanning} className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white">
+              <Button onClick={() => verifyStudent()} disabled={isScanning} className="w-full h-12">
                 {isScanning ? "Checking..." : "Verify Student Meal"}
               </Button>
             </div>

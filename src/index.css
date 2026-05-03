@@ -22,3 +22,19 @@ button:not(:disabled) {
 button:not(:disabled):active {
   transform: translateY(1px) scale(0.99);
 }
+
+select {
+  min-height: 2.75rem;
+  border-radius: 0.75rem;
+  border-color: rgb(229 231 235);
+  background-color: white;
+  color: rgb(23 23 23);
+  font-weight: 500;
+}
+
+select:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  border-color: rgb(99 102 241);
+  box-shadow: 0 0 0 3px rgb(99 102 241 / 0.18);
+}

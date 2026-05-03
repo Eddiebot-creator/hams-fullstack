@@ -5,6 +5,7 @@ import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type LaundryBasket, type Student } from "@/src/lib/api";
 import { showToast } from "@/src/components/ui/toast";
+import CameraQrScanner from "@/src/components/scanner/CameraQrScanner";
 
 export default function LaundryScanner() {
   const [scanStatus, setScanStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -50,6 +51,12 @@ export default function LaundryScanner() {
     }
   };
 
+  const handleQrDetected = (id: string) => {
+    setStudentId(id);
+    setMessage(`Student ID ${id} detected. Enter basket code and save.`);
+    setScanStatus("idle");
+  };
+
   return (
     <div className="p-3 sm:p-6 lg:p-8 max-w-lg mx-auto space-y-4 flex flex-col items-center justify-center min-h-[calc(100vh-8rem)]">
       <motion.div
@@ -93,15 +100,8 @@ export default function LaundryScanner() {
           </label>
         </div>
         
-        <div className="relative w-full max-w-72 aspect-square mx-auto mb-6 bg-neutral-900 rounded-3xl overflow-hidden shadow-inner flex items-center justify-center">
-          <div className="absolute inset-0 border-4 border-indigo-500/30 m-4 rounded-xl pointer-events-none"></div>
-          <ScanLine className="w-16 h-16 text-indigo-500/50 animate-pulse" />
-          
-          <motion.div 
-            animate={{ y: [-120, 120, -120] }}
-            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-            className="absolute top-1/2 left-4 right-4 h-0.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,1)] z-10"
-          />
+        <div className="mb-6">
+          <CameraQrScanner label="Camera QR laundry scanner" onDetected={handleQrDetected} />
         </div>
 
         <div className="mb-6">
