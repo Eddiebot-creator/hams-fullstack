@@ -121,10 +121,14 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
         {/* Mobile Header */}
         <header className="md:hidden h-14 bg-white border-b border-neutral-200 flex items-center justify-between px-4">
           <div className="flex items-center">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-sm">
-              <span className="text-white font-bold text-sm">MA</span>
+            <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-sm border border-neutral-100 overflow-hidden">
+              <img
+                src="/logo.jpg"
+                alt="Nile University Logo"
+                className="w-full h-full object-contain p-1"
+              />
             </div>
-            <span className="ml-2 font-bold text-lg text-neutral-900">MyAds</span>
+            <span className="ml-2 font-bold text-lg text-neutral-900">HAMS</span>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))} className="text-neutral-500 rounded-lg p-1 hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
