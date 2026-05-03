@@ -619,6 +619,22 @@ def create_app():
         user.pop("password", None)
         return jsonify({"user": user})
 
+    @app.post("/api/auth/request-password-reset")
+    def request_password_reset():
+        payload = request.get_json(silent=True) or {}
+        email = payload.get("email", "").strip()
+        if not email:
+            return jsonify({"message": "Email is required."}), 400
+
+        with get_connection() as conn:
+            user = conn.execute("SELECT id, name, role, student_id AS studentId FROM users WHERE email = ?", (email,)).fetchone()
+            if user:
+                create_notification(conn, "admin", "Password reset requested", f"{user['name']} requested a password reset.")
+                log_action(conn, user["role"], "requested password reset", "user", str(user["id"]))
+                conn.commit()
+
+        return jsonify({"message": "If this email exists, an admin will receive the reset request."})
+
     @app.get("/api/students")
     def students():
         return cached_json(
@@ -784,6 +800,87 @@ def create_app():
             conn.commit()
 
         return jsonify({"message": "Password updated."})
+
+    @app.post("/api/users/<int:user_id>/reset-password")
+    def reset_user_password(user_id):
+        payload = request.get_json(silent=True) or {}
+        new_password = payload.get("newPassword", "password")
+        if len(new_password) < 6:
+            return jsonify({"message": "New password must be at least 6 characters."}), 400
+
+        with get_connection() as conn:
+            user = conn.execute("SELECT id, role, student_id AS studentId, email FROM users WHERE id = ?", (user_id,)).fetchone()
+            if user is None:
+                return jsonify({"message": "User not found."}), 404
+            conn.execute("UPDATE users SET password = ? WHERE id = ?", (generate_password_hash(new_password), user_id))
+            create_notification(conn, user["role"], "Password reset", "Your password was reset by an admin.", user["studentId"])
+            log_action(conn, "admin", "reset password", "user", str(user_id))
+            conn.commit()
+
+        return jsonify({"message": "Password reset."})
+
+    @app.get("/api/users/<int:user_id>/history")
+    def user_history(user_id):
+        user = query_one(
+            """
+            SELECT id, name, email, role, student_id AS studentId, hostel, room, course, level, phone, status
+            FROM users
+            WHERE id = ?
+            """,
+            (user_id,),
+        )
+        if user is None:
+            return jsonify({"message": "User not found."}), 404
+
+        student_id = user.get("studentId")
+        meals = []
+        laundry = []
+        notifications_rows = []
+        if student_id:
+            meals = query_all(
+                """
+                SELECT ms.id, m.type, m.menu, ms.scanned_at AS scannedAt
+                FROM meal_scans ms
+                JOIN meals m ON m.id = ms.meal_id
+                WHERE ms.student_id = ?
+                ORDER BY ms.id DESC
+                LIMIT 20
+                """,
+                (student_id,),
+            )
+            laundry = query_all(
+                """
+                SELECT id, basket_code AS basketCode, status, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                FROM laundry_baskets
+                WHERE student_id = ?
+                ORDER BY id DESC
+                LIMIT 20
+                """,
+                (student_id,),
+            )
+            notifications_rows = query_all(
+                """
+                SELECT id, title, message, created_at AS createdAt, is_read AS isRead
+                FROM notifications
+                WHERE student_id = ?
+                ORDER BY id DESC
+                LIMIT 20
+                """,
+                (student_id,),
+            )
+
+        audits = query_all(
+            """
+            SELECT id, actor, action, entity_type AS entityType, entity_ref AS entityRef, created_at AS createdAt
+            FROM audit_logs
+            WHERE actor = ? OR entity_ref = ?
+            ORDER BY id DESC
+            LIMIT 20
+            """,
+            (user["role"], str(user_id)),
+        )
+
+        return jsonify({"user": user, "meals": meals, "laundry": laundry, "notifications": notifications_rows, "audits": audits})
 
     @app.put("/api/students/<int:user_id>")
     def update_student(user_id):

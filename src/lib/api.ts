@@ -215,9 +215,22 @@ export type AdminControlCenter = {
   audits: AuditLog[];
 };
 
+export type UserHistory = {
+  user: (Student & { role: Role }) | StaffUser;
+  meals: Array<{ id: number; type: string; menu: string; scannedAt: string }>;
+  laundry: Array<{ id: number; basketCode: string; status: string; receivedAt: string; estimatedFinish: string | null; notes: string | null }>;
+  notifications: Array<{ id: number; title: string; message: string; createdAt: string; isRead: 0 | 1 }>;
+  audits: AuditLog[];
+};
+
 export const api = {
   login: (payload: { email: string; password: string; role: Role }) =>
     request<{ user: Student & { role: Role } }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  requestPasswordReset: (payload: { email: string }) =>
+    request<{ message: string }>("/auth/request-password-reset", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
@@ -252,6 +265,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  resetUserPassword: (id: number, payload: { newPassword: string }) =>
+    request<{ message: string }>(`/users/${id}/reset-password`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  userHistory: (id: number) => request<UserHistory>(`/users/${id}/history`, { cacheMs: 8000 }),
   meals: () => request<Meal[]>("/meals", { cacheMs: 15000 }),
   createMeal: (payload: CreateMealPayload) =>
     request<Meal>("/meals", {

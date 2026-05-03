@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import Account from "./pages/Account";
 import Notifications from "./pages/Notifications";
 import Layout from "./components/layout/Layout";
+import { ToastViewport } from "./components/ui/toast";
 
 // Student Pages
 import StudentDashboard from "./pages/student/Dashboard";
@@ -33,6 +34,7 @@ import AdminStudents from "./pages/admin/Students";
 import AdminAnalytics from "./pages/admin/Analytics";
 import AdminStaff from "./pages/admin/Staff";
 import AdminAudit from "./pages/admin/Audit";
+import AdminUserHistory from "./pages/admin/UserHistory";
 
 function ProtectedLayout({ role }: { role: "student" | "kitchen" | "laundry" | "admin" }) {
   const user = JSON.parse(localStorage.getItem("hamsUser") || "{}");
@@ -42,6 +44,7 @@ function ProtectedLayout({ role }: { role: "student" | "kitchen" | "laundry" | "
 export default function App() {
   return (
     <Router>
+      <ToastViewport />
       <Routes>
         <Route path="/login" element={<Login />} />
         
@@ -78,6 +81,7 @@ export default function App() {
           <Route index element={<AdminDashboard />} />
           <Route path="meals" element={<AdminMeals />} />
           <Route path="students" element={<AdminStudents />} />
+          <Route path="users/:id" element={<AdminUserHistory />} />
           <Route path="staff" element={<AdminStaff />} />
           <Route path="analytics" element={<AdminAnalytics />} />
           <Route path="audit" element={<AdminAudit />} />

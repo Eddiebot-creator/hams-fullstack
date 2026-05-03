@@ -5,6 +5,7 @@ import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { PasswordInput } from "@/src/components/ui/password-input";
 import { Label } from "@/src/components/ui/label";
+import { showToast } from "@/src/components/ui/toast";
 import { ArrowRight, Lock, Mail, ShieldAlert, Shirt, User, UtensilsCrossed } from "lucide-react";
 import { api, type Role } from "@/src/lib/api";
 
@@ -32,6 +33,8 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [role, setRole] = useState<Role>("student");
   const [error, setError] = useState("");
+  const [email, setEmail] = useState("student@example.com");
+  const [password, setPassword] = useState("password");
 
   const selectedRole = useMemo(() => roleOptions.find((option) => option.role === role) ?? roleOptions[0], [role]);
   const SelectedIcon = selectedRole.icon;
@@ -42,9 +45,9 @@ export default function Login() {
     setError("");
 
     try {
-      const email = `${role}@example.com`;
-      const { user } = await api.login({ email, password: "password", role });
+      const { user } = await api.login({ email, password, role });
       localStorage.setItem("hamsUser", JSON.stringify(user));
+      showToast(`Welcome, ${user.name}.`);
       navigate(destinations[role]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in.");
@@ -108,7 +111,10 @@ export default function Login() {
                   <button
                     key={option.role}
                     type="button"
-                    onClick={() => setRole(option.role)}
+                    onClick={() => {
+                      setRole(option.role);
+                      setEmail(`${option.role}@example.com`);
+                    }}
                     className={`text-left rounded-2xl border p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
                       isSelected
                         ? "border-indigo-500 bg-indigo-50 text-indigo-900"
@@ -150,8 +156,8 @@ export default function Login() {
                     type="email"
                     required
                     className="pl-10 block w-full border-neutral-200 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg bg-neutral-50"
-                    value={`${role}@example.com`}
-                    readOnly
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
                   />
                 </div>
               </div>
@@ -169,11 +175,26 @@ export default function Login() {
                     name="password"
                     required
                     className="pl-10 block w-full border-neutral-200 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg bg-neutral-50"
-                    value="password"
-                    readOnly
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
                   />
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const result = await api.requestPasswordReset({ email });
+                    showToast(result.message);
+                  } catch (err) {
+                    showToast(err instanceof Error ? err.message : "Unable to request reset.", "error");
+                  }
+                }}
+                className="text-sm font-semibold text-indigo-700 hover:text-indigo-900"
+              >
+                Request password reset
+              </button>
 
               <Button
                 type="submit"

@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
+import { Link } from "react-router-dom";
 import { BookOpen, Building2, Download, Edit2, IdCard, Mail, Phone, Search, Trash2, User, UserPlus } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type Student } from "@/src/lib/api";
+import { paginate } from "@/src/lib/pagination";
+import { CardSkeleton } from "@/src/components/ui/skeleton";
+import { showToast } from "@/src/components/ui/toast";
 
 export default function AdminStudents() {
   const [students, setStudents] = useState<Student[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("All");
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -26,7 +32,7 @@ export default function AdminStudents() {
   });
 
   useEffect(() => {
-    api.students().then(setStudents).catch(console.error);
+    api.students().then(setStudents).catch(console.error).finally(() => setIsLoading(false));
   }, []);
 
   const filteredStudents = useMemo(
@@ -43,6 +49,7 @@ export default function AdminStudents() {
       }),
     [search, statusFilter, students]
   );
+  const pagedStudents = paginate(filteredStudents, page, 8);
 
   const updateForm = (field: keyof typeof form, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -93,6 +100,7 @@ export default function AdminStudents() {
       });
       resetForm();
       setIsAdding(false);
+      showToast(editingId ? "Student updated." : "Student added.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to add student.");
     } finally {
@@ -106,6 +114,7 @@ export default function AdminStudents() {
     try {
       await api.deleteStudent(student.id);
       setStudents((current) => current.filter((item) => item.id !== student.id));
+      showToast("Student deleted.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to delete student.");
     }
@@ -267,8 +276,16 @@ export default function AdminStudents() {
           </select>
         </div>
         
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+        ) : (
+        <>
         <div className="grid grid-cols-1 gap-3 p-4 md:hidden">
-          {filteredStudents.map((student) => (
+          {pagedStudents.items.map((student) => (
             <div key={student.id} className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -284,12 +301,15 @@ export default function AdminStudents() {
               <p className="text-sm text-neutral-500 mt-3">{student.email}</p>
               <p className="text-sm text-neutral-500">{student.room ? `${student.hostel}, ${student.room}` : student.hostel}</p>
               <div className="flex gap-2 mt-4">
+                <Link to={`/admin/users/${student.id}`}>
+                  <Button size="sm" variant="outline">History</Button>
+                </Link>
                 <Button size="sm" variant="outline" onClick={() => startEdit(student)}>Edit</Button>
                 <Button size="sm" variant="destructive" onClick={() => handleDeleteStudent(student)}>Delete</Button>
               </div>
             </div>
           ))}
-          {filteredStudents.length === 0 && <p className="text-sm text-neutral-500 text-center py-8">No students match your search.</p>}
+          {pagedStudents.items.length === 0 && <p className="text-sm text-neutral-500 text-center py-8">No students match your search.</p>}
         </div>
 
         <div className="hidden overflow-x-auto md:block">
@@ -305,7 +325,7 @@ export default function AdminStudents() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-neutral-200">
-              {filteredStudents.map((student, i) => (
+              {pagedStudents.items.map((student, i) => (
                 <tr key={i} className="hover:bg-neutral-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">{student.name}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-mono">{student.studentId}</td>
@@ -319,6 +339,7 @@ export default function AdminStudents() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <Link to={`/admin/users/${student.id}`} className="text-neutral-600 hover:text-neutral-900 mr-3">History</Link>
                     <button onClick={() => startEdit(student)} className="text-indigo-600 hover:text-indigo-900 mr-3" title="Edit student">
                       <Edit2 className="h-4 w-4" />
                     </button>
@@ -331,6 +352,15 @@ export default function AdminStudents() {
             </tbody>
           </table>
         </div>
+        <div className="px-6 py-4 border-t border-neutral-100 flex items-center justify-between">
+          <p className="text-sm text-neutral-500">Page {pagedStudents.page} of {pagedStudents.totalPages}</p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={pagedStudents.page === 1} onClick={() => setPage((value) => value - 1)}>Previous</Button>
+            <Button variant="outline" size="sm" disabled={pagedStudents.page === pagedStudents.totalPages} onClick={() => setPage((value) => value + 1)}>Next</Button>
+          </div>
+        </div>
+        </>
+        )}
       </div>
     </div>
   );

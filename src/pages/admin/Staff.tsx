@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
+import { Link } from "react-router-dom";
 import { Mail, Search, ShieldCheck, UserPlus } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type StaffUser } from "@/src/lib/api";
+import { showToast } from "@/src/components/ui/toast";
+import { CardSkeleton } from "@/src/components/ui/skeleton";
 
 export default function AdminStaff() {
   const [staff, setStaff] = useState<StaffUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
   const [isAdding, setIsAdding] = useState(false);
@@ -15,7 +19,7 @@ export default function AdminStaff() {
   const [form, setForm] = useState({ name: "", email: "", role: "kitchen" as "kitchen" | "laundry" | "admin", status: "Active" });
 
   useEffect(() => {
-    api.staff().then(setStaff).catch(console.error);
+    api.staff().then(setStaff).catch(console.error).finally(() => setIsLoading(false));
   }, []);
 
   const filteredStaff = useMemo(() => {
@@ -37,6 +41,7 @@ export default function AdminStaff() {
       setForm({ name: "", email: "", role: "kitchen", status: "Active" });
       setIsAdding(false);
       setMessage("Staff account created.");
+      showToast("Staff account created.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Unable to create staff account.");
     } finally {
@@ -97,6 +102,13 @@ export default function AdminStaff() {
         </select>
       </div>
 
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filteredStaff.map((member) => (
           <div key={member.id} className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-5">
@@ -108,9 +120,11 @@ export default function AdminStaff() {
               <span className="rounded-full bg-indigo-50 text-indigo-700 px-3 py-1 text-xs font-semibold capitalize">{member.role}</span>
             </div>
             <p className="mt-4 text-sm text-neutral-600 flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-green-600" />{member.status}</p>
+            <Link to={`/admin/users/${member.id}`} className="mt-4 inline-flex text-sm font-semibold text-indigo-700 hover:text-indigo-900">View history</Link>
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }

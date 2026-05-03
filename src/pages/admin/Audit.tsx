@@ -3,10 +3,12 @@ import { Download, Search, ShieldCheck } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { api, type AuditLog } from "@/src/lib/api";
+import { paginate } from "@/src/lib/pagination";
 
 export default function AdminAudit() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     api.auditLogs().then(setLogs).catch(console.error);
@@ -21,6 +23,7 @@ export default function AdminAudit() {
         .includes(query)
     );
   }, [logs, search]);
+  const pagedLogs = paginate(filteredLogs, page, 10);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
@@ -58,7 +61,7 @@ export default function AdminAudit() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-neutral-200">
-              {filteredLogs.map((log) => (
+              {pagedLogs.items.map((log) => (
                 <tr key={log.id} className="hover:bg-neutral-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900 capitalize">{log.actor}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-600">{log.action}</td>
@@ -71,13 +74,20 @@ export default function AdminAudit() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{log.createdAt}</td>
                 </tr>
               ))}
-              {filteredLogs.length === 0 && (
+              {pagedLogs.items.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-6 py-10 text-center text-sm text-neutral-500">No audit records found.</td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+        <div className="px-6 py-4 border-t border-neutral-100 flex items-center justify-between">
+          <p className="text-sm text-neutral-500">Page {pagedLogs.page} of {pagedLogs.totalPages}</p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={pagedLogs.page === 1} onClick={() => setPage((value) => value - 1)}>Previous</Button>
+            <Button variant="outline" size="sm" disabled={pagedLogs.page === pagedLogs.totalPages} onClick={() => setPage((value) => value + 1)}>Next</Button>
+          </div>
         </div>
       </div>
     </div>
