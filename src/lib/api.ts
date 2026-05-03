@@ -23,6 +23,20 @@ function friendlyNetworkError(error: unknown) {
   return error;
 }
 
+async function readErrorMessage(response: Response, path: string) {
+  const contentType = response.headers.get("Content-Type") || "";
+  if (contentType.includes("application/json")) {
+    const error = await response.json().catch(() => null);
+    return error?.message || `Request failed with status ${response.status}.`;
+  }
+
+  const text = await response.text().catch(() => "");
+  if (response.status >= 500) {
+    return `The server had a problem while processing ${path}. Check Render logs or try again in a moment.`;
+  }
+  return text.trim() || `Request failed with status ${response.status}.`;
+}
+
 async function fetchJson<T>(path: string, options: RequestInit, retries: number, timeoutMs: number): Promise<T> {
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     const controller = new AbortController();
@@ -40,18 +54,18 @@ async function fetchJson<T>(path: string, options: RequestInit, retries: number,
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: "Request failed." }));
+        const message = await readErrorMessage(response, path);
         const shouldRetry = response.status >= 500 && attempt < retries;
         if (shouldRetry) {
           await wait(350 * (attempt + 1));
           continue;
         }
-        if (response.status === 401) {
+        if (response.status === 401 && !path.startsWith("/auth/")) {
           localStorage.removeItem("hamsToken");
           localStorage.removeItem("hamsUser");
           window.dispatchEvent(new CustomEvent("hams-session-expired"));
         }
-        throw new Error(error.message ?? "Request failed.");
+        throw new Error(message);
       }
 
       return response.json() as Promise<T>;

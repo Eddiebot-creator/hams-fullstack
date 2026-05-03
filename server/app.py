@@ -158,6 +158,12 @@ class DatabaseConnection:
                 self.from_pool = True
             except queue.Empty:
                 self.conn = pymysql.connect(**mysql_config_from_url(DATABASE_URL))
+            except Exception:
+                try:
+                    self.conn.close()
+                except Exception:
+                    pass
+                self.conn = pymysql.connect(**mysql_config_from_url(DATABASE_URL))
         else:
             DATA_DIR.mkdir(parents=True, exist_ok=True)
             self.conn = sqlite3.connect(DB_PATH)
@@ -930,27 +936,30 @@ def create_app():
         if not email or not password:
             return jsonify({"message": "Email and password are required."}), 400
 
-        user = query_one(
-            """
-            SELECT id, name, email, password, role, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
-            FROM users
-            WHERE email = ?
-            """,
-            (email,),
-        )
+        try:
+            user = query_one(
+                """
+                SELECT id, name, email, password, role, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
+                FROM users
+                WHERE email = ?
+                """,
+                (email,),
+            )
 
-        if user is None or not check_password_hash(user["password"], password):
+            if user is None or not check_password_hash(user["password"], password):
+                with get_connection() as conn:
+                    log_action(conn, "unknown", "failed login", "user", email)
+                    conn.commit()
+                return jsonify({"message": "Invalid login details."}), 401
+
+            user.pop("password", None)
+            token = create_token(user)
             with get_connection() as conn:
-                log_action(conn, "unknown", "failed login", "user", email)
+                log_action(conn, user["name"], f"logged in from {request.remote_addr or 'unknown'}", "user", str(user["id"]))
                 conn.commit()
-            return jsonify({"message": "Invalid login details."}), 401
-
-        user.pop("password", None)
-        token = create_token(user)
-        with get_connection() as conn:
-            log_action(conn, user["name"], f"logged in from {request.remote_addr or 'unknown'}", "user", str(user["id"]))
-            conn.commit()
-        return jsonify({"user": user, "token": token})
+            return jsonify({"user": user, "token": token})
+        except Exception as exc:
+            return jsonify({"message": f"Login service error: {str(exc)}"}), 500
 
     @app.post("/api/auth/request-password-reset")
     def request_password_reset():
