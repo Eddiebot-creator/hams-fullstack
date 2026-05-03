@@ -2,15 +2,17 @@ import { useEffect, useState } from "react";
 import { Bell, CheckCircle2 } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { api, type Notification, type Role } from "@/src/lib/api";
+import { CardSkeleton } from "@/src/components/ui/skeleton";
+import { showToast } from "@/src/components/ui/toast";
 
 export default function Notifications() {
   const user = JSON.parse(localStorage.getItem("hamsUser") || "{}");
   const role = (user.role || "student") as Role;
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [message, setMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
   const loadNotifications = () => {
-    api.notifications(role, user.studentId).then(setNotifications).catch(console.error);
+    api.notifications(role, user.studentId).then(setNotifications).catch(console.error).finally(() => setIsLoading(false));
   };
 
   useEffect(() => {
@@ -20,7 +22,14 @@ export default function Notifications() {
   const markAllRead = async () => {
     await api.markNotificationsRead({ role, studentId: user.studentId });
     setNotifications((current) => current.map((item) => ({ ...item, isRead: 1 })));
-    setMessage("Notifications marked as read.");
+    showToast("Notifications marked as read.");
+  };
+
+  const markOneRead = async (notification: Notification) => {
+    if (notification.isRead === 1) return;
+    await api.markNotificationRead(notification.id);
+    setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, isRead: 1 } : item));
+    showToast("Notification marked as read.");
   };
 
   return (
@@ -36,10 +45,14 @@ export default function Notifications() {
         </Button>
       </div>
 
-      {message && <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-medium text-green-800">{message}</div>}
-
       <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
-        {notifications.length === 0 ? (
+        {isLoading ? (
+          <div className="grid grid-cols-1 gap-3 p-4">
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+        ) : notifications.length === 0 ? (
           <div className="p-10 text-center">
             <Bell className="w-10 h-10 mx-auto text-neutral-300 mb-3" />
             <p className="font-semibold text-neutral-900">No notifications yet</p>
@@ -58,7 +71,13 @@ export default function Notifications() {
                     <p className="text-sm text-neutral-600 mt-1">{notification.message}</p>
                     <p className="text-xs text-neutral-400 mt-2">{notification.createdAt}</p>
                   </div>
-                  {notification.isRead === 0 && <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 mt-2" />}
+                  {notification.isRead === 0 ? (
+                    <Button size="sm" variant="outline" onClick={() => markOneRead(notification)}>
+                      Mark read
+                    </Button>
+                  ) : (
+                    <span className="text-xs font-semibold text-neutral-400 mt-2">Read</span>
+                  )}
                 </div>
               </div>
             ))}

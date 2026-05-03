@@ -3,39 +3,48 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import Login from "./pages/Login";
-import Account from "./pages/Account";
-import Notifications from "./pages/Notifications";
 import Layout from "./components/layout/Layout";
 import { ToastViewport } from "./components/ui/toast";
 import NetworkStatus from "./components/layout/NetworkStatus";
+import { CardSkeleton } from "./components/ui/skeleton";
 
-// Student Pages
-import StudentDashboard from "./pages/student/Dashboard";
-import StudentQR from "./pages/student/QRCode";
-import StudentLaundry from "./pages/student/Laundry";
-import StudentProfile from "./pages/student/Profile";
+const Login = lazy(() => import("./pages/Login"));
+const Account = lazy(() => import("./pages/Account"));
+const Notifications = lazy(() => import("./pages/Notifications"));
 
-// Kitchen Pages
-import KitchenDashboard from "./pages/kitchen/Dashboard";
-import KitchenScanner from "./pages/kitchen/Scanner";
+const StudentDashboard = lazy(() => import("./pages/student/Dashboard"));
+const StudentQR = lazy(() => import("./pages/student/QRCode"));
+const StudentLaundry = lazy(() => import("./pages/student/Laundry"));
+const StudentProfile = lazy(() => import("./pages/student/Profile"));
 
-// Laundry Staff Pages
-import LaundryDashboard from "./pages/laundry/Dashboard";
-import LaundryBaskets from "./pages/laundry/Baskets";
-import LaundryBoard from "./pages/laundry/Board";
-import LaundryReports from "./pages/laundry/Reports";
-import LaundryScanner from "./pages/laundry/Scanner";
+const KitchenDashboard = lazy(() => import("./pages/kitchen/Dashboard"));
+const KitchenScanner = lazy(() => import("./pages/kitchen/Scanner"));
 
-// Admin Pages
-import AdminDashboard from "./pages/admin/Dashboard";
-import AdminMeals from "./pages/admin/Meals";
-import AdminStudents from "./pages/admin/Students";
-import AdminAnalytics from "./pages/admin/Analytics";
-import AdminStaff from "./pages/admin/Staff";
-import AdminAudit from "./pages/admin/Audit";
-import AdminUserHistory from "./pages/admin/UserHistory";
+const LaundryDashboard = lazy(() => import("./pages/laundry/Dashboard"));
+const LaundryBaskets = lazy(() => import("./pages/laundry/Baskets"));
+const LaundryBoard = lazy(() => import("./pages/laundry/Board"));
+const LaundryReports = lazy(() => import("./pages/laundry/Reports"));
+const LaundryScanner = lazy(() => import("./pages/laundry/Scanner"));
+
+const AdminDashboard = lazy(() => import("./pages/admin/Dashboard"));
+const AdminMeals = lazy(() => import("./pages/admin/Meals"));
+const AdminStudents = lazy(() => import("./pages/admin/Students"));
+const AdminAnalytics = lazy(() => import("./pages/admin/Analytics"));
+const AdminStaff = lazy(() => import("./pages/admin/Staff"));
+const AdminAudit = lazy(() => import("./pages/admin/Audit"));
+const AdminUserHistory = lazy(() => import("./pages/admin/UserHistory"));
+
+function PageLoader() {
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4">
+      <CardSkeleton />
+      <CardSkeleton />
+      <CardSkeleton />
+    </div>
+  );
+}
 
 function ProtectedLayout({ role }: { role: "student" | "kitchen" | "laundry" | "admin" }) {
   const user = JSON.parse(localStorage.getItem("hamsUser") || "{}");
@@ -47,6 +56,7 @@ export default function App() {
     <Router>
       <ToastViewport />
       <NetworkStatus />
+      <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/login" element={<Login />} />
         
@@ -93,6 +103,7 @@ export default function App() {
 
         <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
+      </Suspense>
     </Router>
   );
 }
