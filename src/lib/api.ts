@@ -355,6 +355,11 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
+  scanLaundry: (payload: { action: "receive" | "return"; basketCode: string; studentId: string; staffName?: string }) =>
+    request<{ message: string; basket: LaundryBasket; student: Student }>("/laundry/scan", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   deleteLaundryBasket: (id: number) =>
     request<{ message: string }>(`/laundry/baskets/${id}`, {
       method: "DELETE",

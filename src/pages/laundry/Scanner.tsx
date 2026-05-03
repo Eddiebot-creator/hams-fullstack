@@ -1,19 +1,51 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { ScanLine, CheckCircle2, XCircle, Package, Shirt } from "lucide-react";
+import { ScanLine, CheckCircle2, XCircle, Package, Shirt, IdCard } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
+import { Input } from "@/src/components/ui/input";
+import { api, type LaundryBasket, type Student } from "@/src/lib/api";
+import { showToast } from "@/src/components/ui/toast";
 
 export default function LaundryScanner() {
-  // 1. Added 'error' to the allowed states
   const [scanStatus, setScanStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [actionType, setActionType] = useState<'receive' | 'return'>('receive');
+  const [basketCode, setBasketCode] = useState("");
+  const [studentId, setStudentId] = useState("");
+  const [message, setMessage] = useState("Waiting for scan...");
+  const [basket, setBasket] = useState<LaundryBasket | null>(null);
+  const [student, setStudent] = useState<Student | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // 2. Added the 'status' variable inside the parentheses so it listens to the buttons
-  const simulateScan = (status: 'success' | 'error') => {
-    setScanStatus(status); // Now it uses whatever the button tells it to use!
-    
-    // Optional: Resets back to idle after 3 seconds automatically
-    setTimeout(() => setScanStatus('idle'), 3000); 
+  const saveScan = async () => {
+    if (!basketCode.trim() || !studentId.trim()) {
+      setScanStatus("error");
+      setMessage("Enter basket code and student ID before scanning.");
+      return;
+    }
+
+    const storedUser = JSON.parse(localStorage.getItem("hamsUser") || "{}");
+    setIsSaving(true);
+    setBasket(null);
+    setStudent(null);
+
+    try {
+      const result = await api.scanLaundry({
+        action: actionType,
+        basketCode: basketCode.trim(),
+        studentId: studentId.trim(),
+        staffName: storedUser.name || "Laundry Staff",
+      });
+      setBasket(result.basket);
+      setStudent(result.student);
+      setMessage(result.message);
+      setScanStatus("success");
+      showToast(result.message);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Unable to save laundry scan.");
+      setScanStatus("error");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -26,7 +58,7 @@ export default function LaundryScanner() {
         <div className="absolute top-0 left-0 w-full h-2 bg-indigo-600"></div>
         
         <h1 className="text-2xl font-bold text-neutral-900 mb-2 mt-4">Laundry Scanner</h1>
-        <p className="text-neutral-500 mb-6">Scan student QR code to process laundry</p>
+        <p className="text-neutral-500 mb-6">Save every laundry scan directly to the database.</p>
 
         <div className="flex justify-center space-x-2 mb-8">
           <Button 
@@ -37,7 +69,26 @@ export default function LaundryScanner() {
             <Package className="w-4 h-4 mr-2" />
             Receive
           </Button>
+          <Button
+            variant={actionType === 'return' ? 'default' : 'outline'}
+            onClick={() => setActionType('return')}
+            className={`w-32 ${actionType === 'return' ? 'bg-indigo-600 text-white' : 'text-neutral-600'}`}
+          >
+            <Shirt className="w-4 h-4 mr-2" />
+            Return
+          </Button>
           
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 mb-6 text-left">
+          <label className="space-y-1">
+            <span className="text-sm font-semibold text-neutral-700 flex items-center gap-2"><Package className="w-4 h-4" /> Basket code</span>
+            <Input value={basketCode} onChange={(event) => setBasketCode(event.target.value)} placeholder="Example: 1042" />
+          </label>
+          <label className="space-y-1">
+            <span className="text-sm font-semibold text-neutral-700 flex items-center gap-2"><IdCard className="w-4 h-4" /> Student ID</span>
+            <Input value={studentId} onChange={(event) => setStudentId(event.target.value)} placeholder="Example: 240011223" />
+          </label>
         </div>
         
         <div className="relative w-64 h-64 mx-auto mb-8 bg-neutral-900 rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
@@ -51,13 +102,10 @@ export default function LaundryScanner() {
           />
         </div>
 
-{/* Testing Controls - Always visible */}
-        <div className="flex flex-wrap justify-center gap-3 mb-6 p-4 bg-neutral-50 rounded-xl border border-neutral-200">
-          <Button variant="outline" onClick={() => simulateScan('success')} className="border-green-200 text-green-700 hover:bg-green-50">
-            Simulate Success
-          </Button>
-          <Button variant="outline" onClick={() => simulateScan('error')} className="border-red-200 text-red-700 hover:bg-red-50">
-            Simulate Denied
+        <div className="mb-6">
+          <Button onClick={saveScan} disabled={isSaving} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+            <ScanLine className="w-4 h-4" />
+            {isSaving ? "Saving scan..." : `Save ${actionType === "receive" ? "Receive" : "Return"} Scan`}
           </Button>
         </div>
 
@@ -76,7 +124,9 @@ export default function LaundryScanner() {
           >
             <CheckCircle2 className="w-10 h-10 text-green-500 mb-2" />
             <p className="font-bold text-green-800 text-lg">Verification Approved</p>
-            <p className="text-sm text-green-600">Student ID: 20221068</p>
+            <p className="text-sm text-green-700">{message}</p>
+            {student && <p className="text-sm text-green-600 mt-1">{student.name} - {student.studentId}</p>}
+            {basket && <p className="text-xs text-green-600 mt-1">Status saved as {basket.status}</p>}
           </motion.div>
         )}
 
@@ -88,7 +138,7 @@ export default function LaundryScanner() {
           >
             <XCircle className="w-10 h-10 text-red-500 mb-2" />
             <p className="font-bold text-red-800 text-lg">Verification Rejected</p>
-            <p className="text-sm text-red-600">Not Eligible for Laundry</p>
+            <p className="text-sm text-red-600">{message}</p>
           </motion.div>
         )}
        </motion.div>

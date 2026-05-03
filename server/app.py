@@ -1312,6 +1312,89 @@ def create_app():
         )
         return jsonify(basket), 201
 
+    @app.post("/api/laundry/scan")
+    def scan_laundry():
+        payload = request.get_json(silent=True) or {}
+        action = payload.get("action")
+        basket_code = (payload.get("basketCode") or "").strip()
+        student_id = (payload.get("studentId") or "").strip()
+        staff_name = payload.get("staffName") or "Laundry Staff"
+
+        if action not in ["receive", "return"]:
+            return jsonify({"message": "Scan action must be receive or return."}), 400
+        if not basket_code or not student_id:
+            return jsonify({"message": "Basket code and student ID are required."}), 400
+
+        student = query_one(
+            """
+            SELECT id, name, student_id AS studentId, status
+            FROM users
+            WHERE role = 'student' AND student_id = ?
+            """,
+            (student_id,),
+        )
+        if student is None:
+            return jsonify({"message": "Student not found."}), 404
+        if student["status"] != "Active":
+            return jsonify({"message": f"{student['name']} is inactive."}), 403
+
+        with get_connection() as conn:
+            existing = conn.execute(
+                """
+                SELECT id, basket_code AS basketCode, student_id AS studentId, status,
+                       received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                FROM laundry_baskets
+                WHERE basket_code = ?
+                """,
+                (basket_code,),
+            ).fetchone()
+
+            if action == "return":
+                if existing is None:
+                    return jsonify({"message": "Basket must be received before it can be returned."}), 404
+                if existing["studentId"] != student_id:
+                    return jsonify({"message": "Basket does not belong to this student."}), 409
+                status = "Picked Up"
+                activity = "Returned to Student"
+                conn.execute("UPDATE laundry_baskets SET status = ? WHERE id = ?", (status, existing["id"]))
+                basket_id = existing["id"]
+            else:
+                status = "Pending"
+                activity = "Received by Scanner"
+                if existing is None:
+                    cursor = conn.execute(
+                        """
+                        INSERT INTO laundry_baskets (basket_code, student_id, status, received_at, estimated_finish, notes)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (basket_code, student_id, status, "Now", payload.get("estimatedFinish"), payload.get("notes", "Scanned at laundry desk")),
+                    )
+                    basket_id = cursor.lastrowid
+                else:
+                    if existing["studentId"] != student_id:
+                        return jsonify({"message": "Basket code is already assigned to another student."}), 409
+                    conn.execute("UPDATE laundry_baskets SET status = ? WHERE id = ?", (status, existing["id"]))
+                    basket_id = existing["id"]
+
+            conn.execute(
+                "INSERT INTO laundry_activity (basket_code, action, staff_name, activity_time) VALUES (?, ?, ?, ?)",
+                (basket_code, activity, staff_name, "Now"),
+            )
+            create_notification(conn, "student", "Laundry scan saved", f"Basket #{basket_code} was {activity.lower()}.", student_id)
+            log_action(conn, staff_name, activity.lower(), "basket", basket_code)
+            conn.commit()
+
+        basket = query_one(
+            """
+            SELECT id, basket_code AS basketCode, student_id AS studentId, status,
+                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+            FROM laundry_baskets
+            WHERE id = ?
+            """,
+            (basket_id,),
+        )
+        return jsonify({"message": f"Basket #{basket_code} saved.", "basket": basket, "student": student})
+
     @app.get("/api/notifications")
     def notifications():
         role = request.args.get("role", "")
