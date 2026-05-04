@@ -34,7 +34,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [resetLink, setResetLink] = useState("");
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,38 +173,13 @@ export default function Login() {
 
               <button
                 type="button"
-                onClick={async () => {
-                  try {
-                    setResetLink("");
-                    if (!email.trim()) {
-                      showToast("Enter your account email first.", "error");
-                      return;
-                    }
-                    const res = await fetch("/api/auth/request-password-reset", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ email }),
-                    });
-                    const result = await res.json();
-                    if (result.resetLink) setResetLink(result.resetLink);
-                    showToast(result.message);
-                  } catch (err) {
-                    showToast(err instanceof Error ? err.message : "Unable to request reset.", "error");
-                  }
-                }}
+                onClick={() => navigate("/reset-password")}
                 className="text-sm font-semibold text-indigo-700 hover:text-indigo-900"
               >
                 Forgot password?
               </button>
 
-              {resetLink && (
-                <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm">
-                  <p className="font-semibold text-indigo-900">Reset link prepared for this account.</p>
-                  <a href={resetLink} className="mt-1 block break-all font-medium text-indigo-700 hover:text-indigo-900">
-                    {resetLink}
-                  </a>
-                </div>
-              )}
+
 
               <Button
                 type="submit"

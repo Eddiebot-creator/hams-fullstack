@@ -6,10 +6,11 @@ import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 
 async function apiForgotPassword(email: string) {
-  const res = await fetch("/api/auth/forgot-password", {
+  const res = await fetch("/api/auth/request-password-reset", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email }),
+    credentials: "omit",
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || "Request failed.");
@@ -20,7 +21,7 @@ async function apiResetPassword(token: string, password: string) {
   const res = await fetch("/api/auth/reset-password", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token, password }),
+    body: JSON.stringify({ token, newPassword: password }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || "Reset failed.");
@@ -74,7 +75,7 @@ function ForgotForm() {
               <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
               <h1 className="text-2xl font-black text-neutral-950">Check your email</h1>
               <p className="text-sm text-neutral-500">
-                If an account exists for <span className="font-bold text-neutral-700">{email}</span>, a password reset link has been sent. Check your inbox and spam folder.
+                A password reset link has been sent to <span className="font-bold text-neutral-700">{email}</span>. Check your inbox and spam folder.
               </p>
               <Link to="/login">
                 <Button variant="outline" className="mt-4 w-full">
