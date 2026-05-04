@@ -2324,6 +2324,8 @@ def create_app():
         student_id = parse_student_id_from_scan(scanned_value)
         staff_name = payload.get("staffName") or "Laundry Staff"
         clothes_count = min(max(int(payload.get("clothesCount", 1) or 1), 1), 30)
+
+        if action not in ["receive", "return"]:
             return jsonify({"message": "Scan action must be receive or return."}), 400
         if not basket_code or not student_id:
             return jsonify({"message": "Basket code and student ID are required."}), 400
