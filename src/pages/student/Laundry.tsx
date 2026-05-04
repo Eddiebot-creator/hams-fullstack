@@ -47,7 +47,7 @@ export default function Laundry() {
 
   const requestDropQr = async () => {
     if (!studentId) return;
-    const clothesCount = Math.max(1, Number(dropCount) || 1);
+    const clothesCount = Math.min(30, Math.max(1, Number(dropCount) || 1));
     setIsRequestingDrop(true);
     try {
       const basketCode = `LAU${Date.now().toString().slice(-6)}`;
@@ -101,7 +101,7 @@ export default function Laundry() {
             </div>
             <div className="w-full sm:w-64">
               <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-indigo-700">Clothes count</label>
-              <Input type="number" min={1} value={dropCount} onChange={(event) => setDropCount(event.target.value)} />
+              <Input type="number" min={1} max={30} value={dropCount} onChange={(event) => setDropCount(String(Math.min(30, Math.max(1, Number(event.target.value) || 1))))} />
             </div>
           </div>
           <Button className="mt-4 bg-indigo-600 text-white hover:bg-indigo-700" onClick={requestDropQr} disabled={isRequestingDrop}>
