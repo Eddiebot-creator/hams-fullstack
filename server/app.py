@@ -2254,7 +2254,7 @@ def create_app():
         payload = request.get_json(silent=True) or {}
         basket_code = payload.get("basketCode") or f"REQ{student_id[-4:]}"
         received_at = payload.get("receivedAt") or utc_now_text()
-        clothes_count = max(int(payload.get("clothesCount", 1) or 1), 1)
+        clothes_count = min(max(int(payload.get("clothesCount", 1) or 1), 1), 30)
         student = query_one("SELECT name, laundry_subscribed AS laundrySubscribed FROM users WHERE role = 'student' AND student_id = ?", (student_id,))
         if student is None:
             return jsonify({"message": "Student not found."}), 404
@@ -2263,7 +2263,7 @@ def create_app():
 
         # Enforce 30 clothes per week limit
         WEEKLY_CLOTHES_LIMIT = 30
-        week_start = (utc_now_text()[:10])  # today's date as anchor
+        week_start = utc_now_text()[:10]
         weekly_total = query_one(
             """
             SELECT COALESCE(SUM(clothes_count), 0) AS total
@@ -2278,7 +2278,7 @@ def create_app():
         if used + clothes_count > WEEKLY_CLOTHES_LIMIT:
             remaining = max(WEEKLY_CLOTHES_LIMIT - used, 0)
             return jsonify({
-                "message": f"Weekly clothes limit reached. You have used {used}/{WEEKLY_CLOTHES_LIMIT} clothes this week. {remaining} remaining."
+                "message": f"Weekly limit reached. You have used {used}/{WEEKLY_CLOTHES_LIMIT} clothes this week. {remaining} remaining."
             }), 400
 
         try:
@@ -2323,9 +2323,7 @@ def create_app():
         scanned_value = payload.get("qrPayload") or payload.get("studentId") or ""
         student_id = parse_student_id_from_scan(scanned_value)
         staff_name = payload.get("staffName") or "Laundry Staff"
-        clothes_count = max(int(payload.get("clothesCount", 1) or 1), 1)
-
-        if action not in ["receive", "return"]:
+        clothes_count = min(max(int(payload.get("clothesCount", 1) or 1), 1), 30)
             return jsonify({"message": "Scan action must be receive or return."}), 400
         if not basket_code or not student_id:
             return jsonify({"message": "Basket code and student ID are required."}), 400
