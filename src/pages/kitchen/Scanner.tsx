@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { IdCard, CheckCircle2, XCircle, UserRound, Building2, BookOpen } from "lucide-react";
+import { IdCard, CheckCircle2, XCircle, UserRound, Building2, BookOpen, TicketCheck } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { SelectMenu } from "@/src/components/ui/select-menu";
-import { api, type Meal, type Student } from "@/src/lib/api";
+import { api, type Meal, type MealTicket, type Student } from "@/src/lib/api";
 import CameraQrScanner from "@/src/components/scanner/CameraQrScanner";
 
 export default function KitchenScanner() {
@@ -14,6 +14,7 @@ export default function KitchenScanner() {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [mealId, setMealId] = useState(2);
   const [student, setStudent] = useState<Student | null>(null);
+  const [ticket, setTicket] = useState<MealTicket | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [lateReason, setLateReason] = useState("");
 
@@ -25,7 +26,7 @@ export default function KitchenScanner() {
     }).catch(console.error);
   }, []);
 
-  const verifyStudent = async (id = studentId) => {
+  const verifyStudent = async (id = studentId, rawPayload = "", scanMealId = mealId) => {
     const cleanId = id.trim();
     if (!cleanId) {
       setScanMessage("Enter a student ID before scanning.");
@@ -35,9 +36,11 @@ export default function KitchenScanner() {
 
     setIsScanning(true);
     setStudent(null);
+    setTicket(null);
     try {
-      const result = await api.scanMeal(mealId, cleanId, lateReason.trim() || undefined);
+      const result = await api.scanMeal(scanMealId, cleanId, lateReason.trim() || undefined, rawPayload);
       setStudent(result.student);
+      setTicket(result.ticket);
       setScanMessage(`${result.meal.type} approved for Student ID: ${result.studentId}`);
       setScanStatus("success");
       navigator.vibrate?.(80);
@@ -49,12 +52,17 @@ export default function KitchenScanner() {
       setIsScanning(false);
     }
 
-    setTimeout(() => setScanStatus('idle'), 5000);
+    setTimeout(() => setScanStatus('idle'), 12000);
   };
 
-  const handleQrDetected = (id: string) => {
+  const handleQrDetected = (id: string, rawValue: string) => {
+    const parts = rawValue.startsWith("HAMS-MEAL:") ? rawValue.split(":") : [];
+    const qrMealType = parts[1];
+    const qrMeal = qrMealType ? meals.find((meal) => meal.type.toLowerCase() === qrMealType.toLowerCase()) : null;
+    const selectedMealId = qrMeal?.id ?? mealId;
+    if (qrMeal) setMealId(qrMeal.id);
     setStudentId(id);
-    void verifyStudent(id);
+    void verifyStudent(id, rawValue, selectedMealId);
   };
 
   return (
@@ -86,8 +94,8 @@ export default function KitchenScanner() {
               <label className="space-y-2">
                 <SelectMenu value={String(mealId)} onChange={(value) => setMealId(Number(value))} label="Meal to scan" options={meals.map((meal) => ({
                   value: String(meal.id),
-                  label: meal.type,
-                  description: meal.status,
+                  label: `${meal.type} (${meal.status})`,
+                  description: meal.windowLabel || meal.status,
                 }))} />
               </label>
               <label className="space-y-2">
@@ -131,6 +139,33 @@ export default function KitchenScanner() {
                   <div className="rounded-lg bg-white/70 p-3">
                     <BookOpen className="w-4 h-4 text-neutral-400 mb-1" />
                     <p className="text-xs text-neutral-600">{student.course}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {ticket && (
+              <div className="mt-4 w-full rounded-2xl border border-green-200 bg-white p-4 text-left shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-100 text-green-700">
+                    <TicketCheck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-green-700">Digital meal ticket</p>
+                    <p className="font-mono text-sm font-black text-neutral-950">{ticket.code}</p>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-xl bg-green-50 p-3">
+                    <p className="font-bold text-green-800">Meal</p>
+                    <p className="font-semibold text-neutral-900">{ticket.mealType}</p>
+                  </div>
+                  <div className="rounded-xl bg-green-50 p-3">
+                    <p className="font-bold text-green-800">Date</p>
+                    <p className="font-semibold text-neutral-900">{ticket.serviceDate}</p>
+                  </div>
+                  <div className="col-span-2 rounded-xl bg-green-50 p-3">
+                    <p className="font-bold text-green-800">Valid window</p>
+                    <p className="font-semibold text-neutral-900">{ticket.validWindow}</p>
                   </div>
                 </div>
               </div>

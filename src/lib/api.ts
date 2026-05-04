@@ -128,10 +128,13 @@ export type Student = {
   studentId: string;
   hostel: string;
   room?: string;
+  gender?: string;
   course: string;
   level: string;
   phone: string;
   photoUrl?: string;
+  mealSubscribed?: boolean;
+  laundrySubscribed?: boolean;
   status: string;
 };
 
@@ -142,6 +145,7 @@ export type Meal = {
   endTime: string;
   menu: string;
   status: string;
+  windowLabel?: string;
   consumed?: 0 | 1;
   scannedAt?: string | null;
 };
@@ -168,9 +172,12 @@ export type CreateStudentPayload = {
   studentId: string;
   hostel: string;
   room?: string;
+  gender: string;
   course: string;
   level: string;
   phone?: string;
+  mealSubscribed?: boolean;
+  laundrySubscribed?: boolean;
   status?: string;
 };
 
@@ -355,6 +362,17 @@ export type TimelineEvent = {
   createdAt: string;
 };
 
+export type MealTicket = {
+  code: string;
+  mealType: string;
+  studentId: string;
+  studentName: string;
+  serviceDate: string;
+  scannedAt: string;
+  validWindow?: string;
+  status: string;
+};
+
 export type GlobalSearchResults = {
   students: Student[];
   staff: StaffUser[];
@@ -380,7 +398,7 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   requestPasswordReset: (payload: { email: string }) =>
-    request<{ message: string }>("/auth/request-password-reset", {
+    request<{ message: string; resetLink?: string; resetToken?: string }>("/auth/request-password-reset", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
@@ -413,9 +431,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  updateProfile: (id: number, payload: { name: string; phone?: string; hostel?: string; room?: string }) =>
+  updateProfile: (id: number, payload: { name: string; phone?: string; hostel?: string; room?: string; gender?: string }) =>
     request<Student & { role: Role }>(`/users/${id}/profile`, {
       method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  updateSubscription: (id: number, payload: { service: "meals" | "laundry"; subscribed: boolean }) =>
+    request<Student & { role: Role }>(`/users/${id}/subscriptions`, {
+      method: "PATCH",
       body: JSON.stringify(payload),
     }),
   updatePhoto: (id: number, payload: { photoUrl: string }) =>
@@ -539,9 +562,9 @@ export const api = {
   adminAnalytics: () => request<AdminAnalytics>("/admin/analytics", { cacheMs: 20000 }),
   exportUrl: (kind: "students" | "meals" | "baskets" | "audits") => `${API_BASE_URL}/export/${kind}`,
   studentOverview: (studentId: string) => request<StudentOverview>(`/student/${studentId}/overview`, { cacheMs: 8000 }),
-  scanMeal: (mealId: number, studentId: string, lateReason?: string) =>
-    request<{ message: string; studentId: string; meal: Meal; student: Student }>(`/meals/${mealId}/scan`, {
+  scanMeal: (mealId: number, studentId: string, lateReason?: string, qrPayload?: string) =>
+    request<{ message: string; studentId: string; meal: Meal; student: Student; ticket: MealTicket }>(`/meals/${mealId}/scan`, {
       method: "POST",
-      body: JSON.stringify({ studentId, lateReason }),
+      body: JSON.stringify({ studentId, lateReason, qrPayload }),
     }),
 };

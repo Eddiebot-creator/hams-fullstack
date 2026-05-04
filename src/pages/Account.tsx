@@ -17,6 +17,11 @@ export default function Account() {
     phone: storedUser.phone || "",
     hostel: storedUser.hostel || "",
     room: storedUser.room || "",
+    gender: storedUser.gender || "",
+  });
+  const [serviceState, setServiceState] = useState({
+    mealSubscribed: storedUser.mealSubscribed !== false,
+    laundrySubscribed: storedUser.laundrySubscribed !== false,
   });
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "" });
   const [photoPreview, setPhotoPreview] = useState(storedUser.photoUrl || "");
@@ -33,6 +38,7 @@ export default function Account() {
     Boolean(profileForm.phone),
     storedUser.role !== "student" || Boolean(profileForm.hostel),
     storedUser.role !== "student" || Boolean(profileForm.room),
+    storedUser.role !== "student" || Boolean(profileForm.gender),
     Boolean(photoPreview),
   ];
   const completion = Math.round((completeItems.filter(Boolean).length / completeItems.length) * 100);
@@ -85,6 +91,21 @@ export default function Account() {
       setMessage("Password changed.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Unable to change password.");
+    }
+  };
+
+  const toggleSubscription = async (service: "meals" | "laundry") => {
+    try {
+      const subscribed = service === "meals" ? !serviceState.mealSubscribed : !serviceState.laundrySubscribed;
+      const updated = await api.updateSubscription(storedUser.id, { service, subscribed });
+      localStorage.setItem("hamsUser", JSON.stringify(updated));
+      setServiceState({
+        mealSubscribed: updated.mealSubscribed !== false,
+        laundrySubscribed: updated.laundrySubscribed !== false,
+      });
+      showToast(`${service === "meals" ? "Meal" : "Laundry"} service ${subscribed ? "subscribed" : "unsubscribed"}.`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Unable to update subscription.", "error");
     }
   };
 
@@ -152,6 +173,10 @@ export default function Account() {
             <>
               <Input placeholder="Hostel" value={profileForm.hostel} onChange={(event) => setProfileForm({ ...profileForm, hostel: event.target.value })} />
               <Input placeholder="Room" value={profileForm.room} onChange={(event) => setProfileForm({ ...profileForm, room: event.target.value })} />
+              <SelectMenu value={profileForm.gender} onChange={(value) => setProfileForm({ ...profileForm, gender: value })} label="Gender" className="min-w-0" options={[
+                { value: "Male", label: "Male", description: "Male student" },
+                { value: "Female", label: "Female", description: "Female student" },
+              ]} />
             </>
           )}
         </div>
@@ -160,6 +185,32 @@ export default function Account() {
           Save Profile
         </Button>
       </form>
+
+      {storedUser.role === "student" && (
+        <section className="bg-white rounded-2xl shadow-sm border border-neutral-100 p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+              <Bell className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-neutral-900">Service Subscriptions</h2>
+              <p className="text-sm text-neutral-500">Control whether meals and laundry are active for your student account.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <ServiceSubscription
+              title="Meals"
+              subscribed={serviceState.mealSubscribed}
+              onToggle={() => toggleSubscription("meals")}
+            />
+            <ServiceSubscription
+              title="Laundry"
+              subscribed={serviceState.laundrySubscribed}
+              onToggle={() => toggleSubscription("laundry")}
+            />
+          </div>
+        </section>
+      )}
 
       <form onSubmit={changePassword} className="bg-white rounded-2xl shadow-sm border border-neutral-100 p-6 space-y-5">
         <div className="flex items-center gap-3">
@@ -243,6 +294,18 @@ export default function Account() {
         </div>
         <Button type="button" onClick={savePreferences} variant="outline">Save Preferences</Button>
       </section>
+    </div>
+  );
+}
+
+function ServiceSubscription({ title, subscribed, onToggle }: { title: string; subscribed: boolean; onToggle: () => void }) {
+  return (
+    <div className={`rounded-2xl border p-4 ${subscribed ? "border-green-100 bg-green-50" : "border-amber-100 bg-amber-50"}`}>
+      <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">{title}</p>
+      <p className="mt-1 text-lg font-black text-neutral-950">{subscribed ? "Subscribed" : "Unsubscribed"}</p>
+      <Button type="button" variant={subscribed ? "outline" : "default"} className="mt-3 w-full" onClick={onToggle}>
+        {subscribed ? `Unsubscribe ${title}` : `Subscribe ${title}`}
+      </Button>
     </div>
   );
 }

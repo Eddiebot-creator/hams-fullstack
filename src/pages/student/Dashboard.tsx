@@ -32,15 +32,21 @@ export default function Dashboard() {
   const consumedMeals = meals.length - remainingMeals;
   const unreadCount = notifications.filter((item) => item.isRead === 0).length;
   const activeStageIndex = Math.max(laundryStages.indexOf(currentLaundry?.status || ""), 0);
+  const mealSubscribed = overview?.student.mealSubscribed !== false;
+  const laundrySubscribed = overview?.student.laundrySubscribed !== false;
   const profileCompletion = useMemo(() => {
     const student = overview?.student;
     if (!student) return 0;
-    const items = [student.name, student.email, student.studentId, student.hostel, student.room, student.phone, student.photoUrl];
+    const items = [student.name, student.email, student.studentId, student.hostel, student.room, student.gender, student.phone, student.photoUrl];
     return Math.round((items.filter(Boolean).length / items.length) * 100);
   }, [overview?.student]);
 
   const requestLaundry = async () => {
     setMessage("");
+    if (!laundrySubscribed) {
+      setMessage("Subscribe to laundry service before requesting a drop-off.");
+      return;
+    }
     try {
       const basket = await api.requestLaundry(studentId, {
         basketCode: `REQ${Date.now().toString().slice(-5)}`,
@@ -52,6 +58,20 @@ export default function Dashboard() {
       setMessage("Laundry request sent.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Unable to send laundry request.");
+    }
+  };
+
+  const toggleSubscription = async (service: "meals" | "laundry") => {
+    const student = overview?.student;
+    if (!student) return;
+    const nextSubscribed = service === "meals" ? !mealSubscribed : !laundrySubscribed;
+    try {
+      const updated = await api.updateSubscription(student.id, { service, subscribed: nextSubscribed });
+      setOverview((current) => current ? { ...current, student: { ...current.student, ...updated } } : current);
+      localStorage.setItem("hamsUser", JSON.stringify(updated));
+      setMessage(`${service === "meals" ? "Meal" : "Laundry"} service ${nextSubscribed ? "subscribed" : "unsubscribed"}.`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Unable to update subscription.");
     }
   };
 
@@ -100,6 +120,21 @@ export default function Dashboard() {
         <QuickAction to="/student/notifications" icon={Bell} label={`Updates${unreadCount ? ` (${unreadCount})` : ""}`} tone="bg-amber-50 text-amber-700 border-amber-100" />
         <QuickAction to="/student/account" icon={Moon} label="Settings" tone="bg-emerald-50 text-emerald-700 border-emerald-100" />
       </div>
+
+      <section className="grid gap-3 md:grid-cols-2">
+        <ServiceCard
+          title="Meals"
+          description="Breakfast and dinner QR ticket access"
+          subscribed={mealSubscribed}
+          onToggle={() => toggleSubscription("meals")}
+        />
+        <ServiceCard
+          title="Laundry"
+          description="Drop-off requests and basket tracking"
+          subscribed={laundrySubscribed}
+          onToggle={() => toggleSubscription("laundry")}
+        />
+      </section>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_0.9fr]">
         <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border border-neutral-100 bg-white p-5 shadow-sm sm:p-6">
@@ -171,10 +206,29 @@ export default function Dashboard() {
               Request laundry drop-off
             </h3>
             <Input placeholder="Optional note for laundry staff" value={requestNote} onChange={(event) => setRequestNote(event.target.value)} />
-            <Button onClick={requestLaundry} className="w-full">Send Request</Button>
+            <Button onClick={requestLaundry} disabled={!laundrySubscribed} className="w-full">
+              {laundrySubscribed ? "Send Request" : "Subscribe to Laundry First"}
+            </Button>
             {message && <p className="text-sm font-bold text-indigo-700">{message}</p>}
           </div>
         </motion.section>
+      </div>
+    </div>
+  );
+}
+
+function ServiceCard({ title, description, subscribed, onToggle }: { title: string; description: string; subscribed: boolean; onToggle: () => void }) {
+  return (
+    <div className={`rounded-3xl border p-4 shadow-sm ${subscribed ? "border-green-100 bg-green-50" : "border-amber-100 bg-amber-50"}`}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">{title} service</p>
+          <p className="mt-1 text-lg font-black text-neutral-950">{subscribed ? "Subscribed" : "Unsubscribed"}</p>
+          <p className="mt-1 text-sm font-medium text-neutral-600">{description}</p>
+        </div>
+        <Button type="button" variant={subscribed ? "outline" : "default"} onClick={onToggle}>
+          {subscribed ? `Unsubscribe ${title}` : `Subscribe ${title}`}
+        </Button>
       </div>
     </div>
   );

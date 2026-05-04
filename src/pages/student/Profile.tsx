@@ -1,18 +1,18 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
-import { User, Mail, Phone, Building, ShieldCheck, Bell, ImagePlus } from "lucide-react";
+import { User, Mail, Phone, Building, ShieldCheck, ImagePlus, UsersRound } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { PasswordInput } from "@/src/components/ui/password-input";
-import { api, type Notification, type Student } from "@/src/lib/api";
+import { SelectMenu } from "@/src/components/ui/select-menu";
+import { api, type Student } from "@/src/lib/api";
 import { compressImage } from "@/src/lib/image";
 
 export default function Profile() {
   const [student, setStudent] = useState<Student | null>(null);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [message, setMessage] = useState("");
-  const [profileForm, setProfileForm] = useState({ name: "", phone: "", hostel: "", room: "" });
+  const [profileForm, setProfileForm] = useState({ name: "", phone: "", hostel: "", room: "", gender: "" });
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "" });
 
   useEffect(() => {
@@ -25,9 +25,9 @@ export default function Profile() {
         phone: overview.student.phone || "",
         hostel: overview.student.hostel || "",
         room: overview.student.room || "",
+        gender: overview.student.gender || "",
       });
     }).catch(console.error);
-    api.notifications("student", studentId).then(setNotifications).catch(console.error);
   }, []);
 
   const saveProfile = async (event: FormEvent) => {
@@ -56,12 +56,6 @@ export default function Profile() {
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Unable to change password.");
     }
-  };
-
-  const markAllRead = async () => {
-    if (!student) return;
-    await api.markNotificationsRead({ role: "student", studentId: student.studentId });
-    setNotifications((current) => current.map((item) => ({ ...item, isRead: 1 })));
   };
 
   const savePhoto = async (file: File) => {
@@ -119,6 +113,10 @@ export default function Profile() {
                 <Input placeholder="Phone" value={profileForm.phone} onChange={(event) => setProfileForm({ ...profileForm, phone: event.target.value })} />
                 <Input placeholder="Hostel" value={profileForm.hostel} onChange={(event) => setProfileForm({ ...profileForm, hostel: event.target.value })} />
                 <Input placeholder="Room" value={profileForm.room} onChange={(event) => setProfileForm({ ...profileForm, room: event.target.value })} />
+                <SelectMenu value={profileForm.gender} onChange={(value) => setProfileForm({ ...profileForm, gender: value })} label="Gender" className="min-w-0" options={[
+                  { value: "Male", label: "Male", description: "Male student" },
+                  { value: "Female", label: "Female", description: "Female student" },
+                ]} />
               </div>
               <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white">Save Profile</Button>
             </form>
@@ -139,6 +137,14 @@ export default function Profile() {
                 <div>
                   <p className="text-xs text-neutral-500 uppercase tracking-wider">Phone</p>
                   <p className="font-medium text-neutral-900">{student?.phone || "-"}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center p-3 rounded-xl bg-neutral-50 border border-neutral-100">
+                <UsersRound className="w-5 h-5 text-neutral-400 mr-3" />
+                <div>
+                  <p className="text-xs text-neutral-500 uppercase tracking-wider">Gender</p>
+                  <p className="font-medium text-neutral-900">{student?.gender || "-"}</p>
                 </div>
               </div>
             </div>
@@ -173,36 +179,8 @@ export default function Profile() {
           <PasswordInput required placeholder="Current password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })} />
           <PasswordInput required placeholder="New password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })} />
         </div>
-        <Button type="submit" variant="outline">Update Password</Button>
+        <Button type="submit" variant="outline">Change Password</Button>
       </form>
-
-      <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden">
-        <div className="p-6 border-b border-neutral-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-            <Bell className="w-5 h-5 text-indigo-600" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-neutral-900">My Updates</h2>
-            <p className="text-sm text-neutral-500">Messages saved for your student account.</p>
-          </div>
-          {notifications.some((item) => item.isRead === 0) && (
-            <Button variant="outline" size="sm" className="ml-auto" onClick={markAllRead}>Mark read</Button>
-          )}
-        </div>
-        <div className="divide-y divide-neutral-100">
-          {notifications.length === 0 ? (
-            <p className="p-6 text-sm text-neutral-500">No updates yet.</p>
-          ) : (
-            notifications.map((notification) => (
-              <div key={notification.id} className={`p-6 ${notification.isRead === 0 ? "bg-indigo-50/50" : ""}`}>
-                <p className="font-semibold text-neutral-900">{notification.title}</p>
-                <p className="text-sm text-neutral-600 mt-1">{notification.message}</p>
-                <p className="text-xs text-neutral-400 mt-2">{notification.createdAt}</p>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
     </div>
   );
 }

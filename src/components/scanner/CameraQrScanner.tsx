@@ -8,6 +8,10 @@ type BarcodeDetectorShape = {
 
 function parseQrValue(value: string) {
   const trimmed = value.trim();
+  if (trimmed.startsWith("HAMS-MEAL:")) {
+    const parts = trimmed.split(":");
+    return parts[2]?.trim() || trimmed;
+  }
   if (trimmed.startsWith("HAMS-STUDENT:")) return trimmed.replace("HAMS-STUDENT:", "").trim();
   return trimmed;
 }

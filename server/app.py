@@ -9,10 +9,13 @@ import hmac
 import io
 import json
 import secrets
+import smtplib
 from pathlib import Path
 from datetime import datetime, timezone
+from email.message import EmailMessage
 from functools import wraps
 from urllib.parse import parse_qs, unquote, urlparse
+from zoneinfo import ZoneInfo
 
 from flask import Flask, Response, g, has_request_context, jsonify, request, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -36,10 +39,78 @@ MYSQL_POOL = queue.LifoQueue(maxsize=int(os.environ.get("MYSQL_POOL_SIZE", "5"))
 RESPONSE_CACHE = {}
 JWT_SECRET = os.environ.get("SECRET_KEY", "hams-development-secret-change-me")
 TOKEN_TTL_SECONDS = int(os.environ.get("TOKEN_TTL_SECONDS", "86400"))
+APP_TIMEZONE = ZoneInfo(os.environ.get("APP_TIMEZONE", "Africa/Lagos"))
+
+MEAL_WINDOWS = {
+    "Breakfast": {"start": "06:30", "end": "08:45", "label": "6:30 AM - 8:45 AM"},
+    "Dinner": {"start": "17:00", "end": "19:45", "label": "5:00 PM - 7:45 PM"},
+}
+ALLOWED_MEALS = tuple(MEAL_WINDOWS.keys())
 
 
 def utc_now_text():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def local_now():
+    return datetime.now(APP_TIMEZONE)
+
+
+def local_date_text():
+    return local_now().date().isoformat()
+
+
+def local_time_label():
+    return local_now().strftime("%I:%M %p")
+
+
+def minutes_from_hhmm(value):
+    hours, minutes = [int(part) for part in value.split(":")]
+    return hours * 60 + minutes
+
+
+def meal_status_for_type(meal_type, now=None):
+    window = MEAL_WINDOWS.get(meal_type)
+    if not window:
+        return "Unavailable"
+
+    current = now or local_now()
+    current_minutes = current.hour * 60 + current.minute
+    start = minutes_from_hhmm(window["start"])
+    end = minutes_from_hhmm(window["end"])
+    if start <= current_minutes <= end:
+        return "Active"
+    if current_minutes < start:
+        return "Upcoming"
+    return "Completed"
+
+
+def decorate_meal_row(row):
+    if row is None:
+        return None
+    meal = dict(row)
+    if meal.get("type") in MEAL_WINDOWS:
+        meal["status"] = meal_status_for_type(meal["type"])
+        meal["windowLabel"] = MEAL_WINDOWS[meal["type"]]["label"]
+    return meal
+
+
+def normalize_meal_type(value):
+    raw = (value or "").strip().lower()
+    for meal_type in ALLOWED_MEALS:
+        if raw == meal_type.lower():
+            return meal_type
+    return ""
+
+
+def parse_student_id_from_scan(value):
+    raw = (value or "").strip()
+    if raw.startswith("HAMS-MEAL:"):
+        parts = raw.split(":")
+        return parts[2].strip() if len(parts) >= 3 else ""
+    if raw.startswith("HAMS-STUDENT:"):
+        return raw.replace("HAMS-STUDENT:", "", 1).strip()
+    return raw
 
 
 def is_password_hash(value):
@@ -100,6 +171,54 @@ def verify_token(token):
         return payload
     except Exception:
         return None
+
+
+def reset_base_url():
+    configured = os.environ.get("APP_BASE_URL") or os.environ.get("CLIENT_ORIGIN")
+    if configured:
+        return configured.rstrip("/")
+    if has_request_context():
+        return request.host_url.rstrip("/")
+    return "http://localhost:4000"
+
+
+def send_password_reset_email(recipient, name, reset_link):
+    smtp_host = os.environ.get("SMTP_HOST")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_username = os.environ.get("SMTP_USERNAME")
+    smtp_password = os.environ.get("SMTP_PASSWORD")
+    sender = os.environ.get("MAIL_FROM") or smtp_username
+
+    if not smtp_host or not sender:
+        return False, "Email sending is not configured."
+
+    message = EmailMessage()
+    message["Subject"] = "Reset your HAMS password"
+    message["From"] = sender
+    message["To"] = recipient
+    message.set_content(
+        "\n".join(
+            [
+                f"Hello {name},",
+                "",
+                "Use this link to reset your HAMS password:",
+                reset_link,
+                "",
+                "This link expires in 1 hour. If you did not request it, you can ignore this email.",
+            ]
+        )
+    )
+
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
+            if os.environ.get("SMTP_USE_TLS", "1") != "0":
+                smtp.starttls()
+            if smtp_username and smtp_password:
+                smtp.login(smtp_username, smtp_password)
+            smtp.send_message(message)
+        return True, "Reset link sent to your email."
+    except Exception as exc:
+        return False, f"Unable to send reset email: {exc}"
 
 
 def current_user():
@@ -272,10 +391,13 @@ def init_db():
               student_id VARCHAR(255) UNIQUE,
               hostel VARCHAR(255),
               room VARCHAR(255),
+              gender VARCHAR(50),
               course VARCHAR(255),
               level VARCHAR(255),
               phone VARCHAR(255),
               photo_url TEXT,
+              meal_subscribed INTEGER NOT NULL DEFAULT 1,
+              laundry_subscribed INTEGER NOT NULL DEFAULT 1,
               status VARCHAR(50) NOT NULL DEFAULT 'Active'
             );
 
@@ -292,6 +414,7 @@ def init_db():
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               student_id VARCHAR(255) NOT NULL,
               meal_id INTEGER NOT NULL,
+              scan_date VARCHAR(32),
               scanned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
               FOREIGN KEY (meal_id) REFERENCES meals(id)
             );
@@ -430,21 +553,41 @@ def init_db():
         user_columns = table_columns(conn, "users")
         if "room" not in user_columns:
             conn.execute("ALTER TABLE users ADD COLUMN room VARCHAR(255)")
+        if "gender" not in user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN gender VARCHAR(50)")
         if "photo_url" not in user_columns:
             conn.execute("ALTER TABLE users ADD COLUMN photo_url TEXT")
+        if "meal_subscribed" not in user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN meal_subscribed INTEGER NOT NULL DEFAULT 1")
+        if "laundry_subscribed" not in user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN laundry_subscribed INTEGER NOT NULL DEFAULT 1")
+
+        scan_columns = table_columns(conn, "meal_scans")
+        if "scan_date" not in scan_columns:
+            conn.execute("ALTER TABLE meal_scans ADD COLUMN scan_date VARCHAR(32)")
 
         seed_db(conn)
         seed_supporting_tables(conn)
+        normalize_user_defaults(conn)
+        normalize_meal_schedule(conn)
         migrate_plaintext_passwords(conn)
         ensure_database_indexes(conn)
     DB_INIT_ERROR = None
 
 
 def ensure_database_indexes(conn):
+    try:
+        if IS_MYSQL:
+            conn.execute("DROP INDEX idx_meal_scans_student_meal ON meal_scans")
+        else:
+            conn.execute("DROP INDEX IF EXISTS idx_meal_scans_student_meal")
+    except Exception:
+        pass
     indexes = [
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_meal_scans_student_meal ON meal_scans (student_id, meal_id)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_meal_scans_student_meal_date ON meal_scans (student_id, meal_id, scan_date)",
         "CREATE INDEX IF NOT EXISTS idx_users_role_student ON users (role, student_id)",
         "CREATE INDEX IF NOT EXISTS idx_users_role_name ON users (role, name)",
+        "CREATE INDEX IF NOT EXISTS idx_users_subscriptions ON users (meal_subscribed, laundry_subscribed)",
         "CREATE INDEX IF NOT EXISTS idx_laundry_baskets_student_status ON laundry_baskets (student_id, status)",
         "CREATE INDEX IF NOT EXISTS idx_notifications_target ON notifications (user_role, student_id, is_read)",
         "CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs (created_at)",
@@ -455,6 +598,41 @@ def ensure_database_indexes(conn):
             conn.execute(sql)
         except Exception as exc:
             print(f"Skipping index setup: {exc}")
+    conn.commit()
+
+
+def normalize_user_defaults(conn):
+    conn.execute("UPDATE users SET meal_subscribed = 1 WHERE meal_subscribed IS NULL")
+    conn.execute("UPDATE users SET laundry_subscribed = 1 WHERE laundry_subscribed IS NULL")
+    conn.execute("UPDATE users SET gender = 'Male' WHERE role = 'student' AND (gender IS NULL OR gender = '') AND name IN ('Samuel Tokunbo', 'Odafe Ojaraida', 'Raymond Chidi')")
+    conn.execute("UPDATE users SET gender = 'Female' WHERE role = 'student' AND (gender IS NULL OR gender = '') AND name IN ('Emmanuella Davies', 'Emily Okoro')")
+    conn.execute("UPDATE meal_scans SET scan_date = SUBSTR(CAST(scanned_at AS CHAR), 1, 10) WHERE scan_date IS NULL OR scan_date = ''")
+    conn.commit()
+
+
+def normalize_meal_schedule(conn):
+    lunch_rows = conn.execute("SELECT id FROM meals WHERE LOWER(type) = 'lunch'").fetchall()
+    for meal in lunch_rows:
+        conn.execute("DELETE FROM meal_scans WHERE meal_id = ?", (meal["id"],))
+    conn.execute("DELETE FROM meals WHERE LOWER(type) = 'lunch'")
+    conn.execute("DELETE FROM kitchen_scan_logs WHERE LOWER(meal_type) = 'lunch'")
+
+    defaults = [
+        ("Breakfast", "06:30 AM", "08:45 AM", "Pap, tea, bread, eggs, fruit", "Upcoming"),
+        ("Dinner", "05:00 PM", "07:45 PM", "Rice, stew, protein, vegetables", "Upcoming"),
+    ]
+    for meal_type, start_time, end_time, menu, status in defaults:
+        existing = conn.execute("SELECT id FROM meals WHERE type = ? LIMIT 1", (meal_type,)).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE meals SET start_time = ?, end_time = ?, status = ? WHERE id = ?",
+                (start_time, end_time, status, existing["id"]),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO meals (type, start_time, end_time, menu, status) VALUES (?, ?, ?, ?, ?)",
+                (meal_type, start_time, end_time, menu, status),
+            )
     conn.commit()
 
 
@@ -482,20 +660,20 @@ def seed_db(conn):
     demo_password = generate_password_hash("password")
     if table_count(conn, "users") == 0:
         users = [
-            ("Samuel Tokunbo", "student@example.com", demo_password, "student", "240011223", "Blue Nile", "Room 402", "Computer Science", "200 Lv", "+234 8097665431", "Active"),
-            ("Kitchen Staff", "kitchen@example.com", demo_password, "kitchen", None, None, None, None, None, None, "Active"),
-            ("Laundry Staff", "laundry@example.com", demo_password, "laundry", None, None, None, None, None, None, "Active"),
-            ("Admin User", "admin@example.com", demo_password, "admin", None, None, None, None, None, None, "Active"),
-            ("Odafe Ojaraida", "20221068@nileuniversity.edu.ng", demo_password, "student", "20221068", "Zambezi", "212", "Mass Communication", "300 Lv", "+234 8010000001", "Active"),
-            ("Raymond Chidi", "241144562@nileuniversity.edu.ng", demo_password, "student", "241144562", "Orange", "105", "Software Engineering", "100 Lv", "+234 8010000002", "Active"),
-            ("Emmanuella Davies", "20234478@nileuniversity.edu.ng", demo_password, "student", "20234478", "Missisipi", "210", "Economics", "200 Lv", "+234 8010000003", "Inactive"),
-            ("Emily Okoro", "211289045@nileuniversity.edu.ng", demo_password, "student", "211289045", "Nile Delta", "304", "Law", "400 Lv", "+234 8010000004", "Active"),
+            ("Samuel Tokunbo", "student@example.com", demo_password, "student", "240011223", "Blue Nile", "Room 402", "Male", "Computer Science", "200 Lv", "+234 8097665431", "Active"),
+            ("Kitchen Staff", "kitchen@example.com", demo_password, "kitchen", None, None, None, None, None, None, None, "Active"),
+            ("Laundry Staff", "laundry@example.com", demo_password, "laundry", None, None, None, None, None, None, None, "Active"),
+            ("Admin User", "admin@example.com", demo_password, "admin", None, None, None, None, None, None, None, "Active"),
+            ("Odafe Ojaraida", "20221068@nileuniversity.edu.ng", demo_password, "student", "20221068", "Zambezi", "212", "Male", "Mass Communication", "300 Lv", "+234 8010000001", "Active"),
+            ("Raymond Chidi", "241144562@nileuniversity.edu.ng", demo_password, "student", "241144562", "Orange", "105", "Male", "Software Engineering", "100 Lv", "+234 8010000002", "Active"),
+            ("Emmanuella Davies", "20234478@nileuniversity.edu.ng", demo_password, "student", "20234478", "Missisipi", "210", "Female", "Economics", "200 Lv", "+234 8010000003", "Inactive"),
+            ("Emily Okoro", "211289045@nileuniversity.edu.ng", demo_password, "student", "211289045", "Nile Delta", "304", "Female", "Law", "400 Lv", "+234 8010000004", "Active"),
         ]
 
         conn.executemany(
             """
-            INSERT INTO users (name, email, password, role, student_id, hostel, room, course, level, phone, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO users (name, email, password, role, student_id, hostel, room, gender, course, level, phone, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             users,
         )
@@ -504,9 +682,8 @@ def seed_db(conn):
         conn.executemany(
             "INSERT INTO meals (type, start_time, end_time, menu, status) VALUES (?, ?, ?, ?, ?)",
             [
-                ("Breakfast", "07:30 AM", "09:30 AM", "Pancakes, Scrambled Eggs, Coffee", "Completed"),
-                ("Lunch", "12:30 PM", "02:30 PM", "Grilled Chicken Salad, Soup", "Active"),
-                ("Dinner", "07:30 PM", "09:30 PM", "Spaghetti Bolognese, Garlic Bread", "Upcoming"),
+                ("Breakfast", "06:30 AM", "08:45 AM", "Pap, tea, bread, eggs, fruit", "Upcoming"),
+                ("Dinner", "05:00 PM", "07:45 PM", "Rice, stew, protein, vegetables", "Upcoming"),
             ],
         )
 
@@ -514,8 +691,8 @@ def seed_db(conn):
         breakfast = conn.execute("SELECT id FROM meals WHERE type = ? ORDER BY id LIMIT 1", ("Breakfast",)).fetchone()
         if breakfast:
             conn.execute(
-                "INSERT INTO meal_scans (student_id, meal_id, scanned_at) VALUES (?, ?, ?)",
-                ("240011223", breakfast["id"], "2026-05-01 08:05:00"),
+                "INSERT INTO meal_scans (student_id, meal_id, scan_date, scanned_at) VALUES (?, ?, ?, ?)",
+                ("240011223", breakfast["id"], "2026-05-01", "2026-05-01 08:05:00"),
             )
 
     if table_count(conn, "laundry_baskets") == 0:
@@ -561,6 +738,10 @@ def database_counts():
         "analytics_kpis",
         "notifications",
         "audit_logs",
+        "user_preferences",
+        "password_reset_tokens",
+        "laundry_issues",
+        "approval_requests",
     ]
     return {table: table_count_value(table) for table in tables}
 
@@ -609,15 +790,26 @@ def create_notification(conn, user_role, title, message, student_id=None):
     )
 
 
+def normalize_user_row(row):
+    if row is None:
+        return None
+    user = dict(row)
+    user["mealSubscribed"] = bool(user.get("mealSubscribed", 1))
+    user["laundrySubscribed"] = bool(user.get("laundrySubscribed", 1))
+    user["gender"] = user.get("gender") or ""
+    return user
+
+
 def user_public_row(user_id):
-    return query_one(
+    return normalize_user_row(query_one(
         """
-        SELECT id, name, email, role, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
+        SELECT id, name, email, role, student_id AS studentId, hostel, room, gender, course, level, phone,
+               photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
         FROM users
         WHERE id = ?
         """,
         (user_id,),
-    )
+    ))
 
 
 def seed_supporting_tables(conn):
@@ -632,7 +824,6 @@ def seed_supporting_tables(conn):
                 ("20221453", "Breakfast", "07:45 AM", "Success"),
                 ("20231452", "Breakfast", "08:42 AM", "Denied (Already Scanned)"),
                 ("20237775", "Breakfast", "08:45 AM", "Success"),
-                ("240011223", "Lunch", "12:55 PM", "Success"),
                 ("20221068", "Dinner", "07:45 PM", "Success"),
             ],
         )
@@ -853,7 +1044,8 @@ def create_app():
             student_id = str(user.get("studentId") or "")
             students_rows = query_all(
                 """
-                SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
+                SELECT id, name, email, student_id AS studentId, hostel, room, gender, course, level, phone,
+                       photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
                 FROM users
                 WHERE role = 'student' AND student_id = ? AND (name LIKE ? OR email LIKE ? OR student_id LIKE ? OR hostel LIKE ?)
                 ORDER BY name
@@ -882,11 +1074,12 @@ def create_app():
                 """,
                 (like_query, like_query, like_query),
             )
-            return jsonify({"students": students_rows, "staff": [], "baskets": baskets, "meals": meals_rows})
+            return jsonify({"students": [normalize_user_row(row) for row in students_rows], "staff": [], "baskets": baskets, "meals": [decorate_meal_row(row) for row in meals_rows]})
 
         students_rows = query_all(
             """
-            SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
+            SELECT id, name, email, student_id AS studentId, hostel, room, gender, course, level, phone,
+                   photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
             FROM users
             WHERE role = 'student' AND (name LIKE ? OR email LIKE ? OR student_id LIKE ? OR hostel LIKE ?)
             ORDER BY name
@@ -925,7 +1118,7 @@ def create_app():
             """,
             (like_query, like_query, like_query),
         )
-        return jsonify({"students": students_rows, "staff": staff_rows, "baskets": baskets, "meals": meals_rows})
+        return jsonify({"students": [normalize_user_row(row) for row in students_rows], "staff": staff_rows, "baskets": baskets, "meals": [decorate_meal_row(row) for row in meals_rows]})
 
     @app.post("/api/auth/login")
     def login():
@@ -939,7 +1132,8 @@ def create_app():
         try:
             user = query_one(
                 """
-                SELECT id, name, email, password, role, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
+                SELECT id, name, email, password, role, student_id AS studentId, hostel, room, gender, course, level,
+                       phone, photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
                 FROM users
                 WHERE email = ?
                 """,
@@ -953,6 +1147,7 @@ def create_app():
                 return jsonify({"message": "Invalid login details."}), 401
 
             user.pop("password", None)
+            user = normalize_user_row(user)
             token = create_token(user)
             with get_connection() as conn:
                 log_action(conn, user["name"], f"logged in from {request.remote_addr or 'unknown'}", "user", str(user["id"]))
@@ -969,8 +1164,11 @@ def create_app():
             return jsonify({"message": "Email is required."}), 400
 
         reset_token = None
+        reset_link = None
+        mail_sent = False
+        mail_message = ""
         with get_connection() as conn:
-            user = conn.execute("SELECT id, name, role, student_id AS studentId FROM users WHERE email = ?", (email,)).fetchone()
+            user = conn.execute("SELECT id, name, email, role, student_id AS studentId FROM users WHERE email = ?", (email,)).fetchone()
             if user:
                 raw_token = secrets.token_urlsafe(32)
                 token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
@@ -986,14 +1184,20 @@ def create_app():
                     """,
                     ("Password Reset", "user", str(user["id"]), user["name"], f"Reset requested for {email}"),
                 )
+                reset_link = f"{reset_base_url()}/reset-password?token={raw_token}"
+                mail_sent, mail_message = send_password_reset_email(user["email"], user["name"], reset_link)
                 reset_token = raw_token if os.environ.get("SHOW_RESET_TOKEN") == "1" else None
                 create_notification(conn, "admin", "Password reset requested", f"{user['name']} requested a password reset.")
                 log_action(conn, user["role"], "requested password reset", "user", str(user["id"]))
                 conn.commit()
 
         response = {"message": "If this email exists, a reset link has been prepared."}
+        if mail_message:
+            response["message"] = mail_message if mail_sent else f"{mail_message} Use the reset link shown for this demo."
         if reset_token:
             response["resetToken"] = reset_token
+        if reset_link and (os.environ.get("SHOW_RESET_TOKEN") == "1" or not mail_sent):
+            response["resetLink"] = reset_link
         return jsonify(response)
 
     @app.post("/api/auth/reset-password")
@@ -1108,7 +1312,8 @@ def create_app():
             total = query_one(f"SELECT COUNT(*) AS count FROM users WHERE {where}", tuple(params))["count"]
             rows = query_all(
                 f"""
-                SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
+                SELECT id, name, email, student_id AS studentId, hostel, room, gender, course, level, phone,
+                       photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
                 FROM users
                 WHERE {where}
                 ORDER BY name
@@ -1116,25 +1321,26 @@ def create_app():
                 """,
                 tuple(params + [page_size, offset]),
             )
-            return paginated_response(rows, total, page, page_size)
+            return paginated_response([normalize_user_row(row) for row in rows], total, page, page_size)
 
         return cached_json(
             "students",
             30,
-            lambda: query_all(
+            lambda: [normalize_user_row(row) for row in query_all(
                 """
-                SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
+                SELECT id, name, email, student_id AS studentId, hostel, room, gender, course, level, phone,
+                       photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
                 FROM users
                 WHERE role = 'student'
                 ORDER BY name
                 """
-            ),
+            )],
         )
 
     @app.post("/api/students")
     def create_student():
         payload = request.get_json(silent=True) or {}
-        required_fields = ["name", "email", "studentId", "hostel", "course", "level"]
+        required_fields = ["name", "email", "studentId", "hostel", "gender", "course", "level"]
         missing_fields = [field for field in required_fields if not payload.get(field)]
 
         if missing_fields:
@@ -1144,8 +1350,8 @@ def create_app():
             with get_connection() as conn:
                 cursor = conn.execute(
                     """
-                    INSERT INTO users (name, email, password, role, student_id, hostel, room, course, level, phone, status)
-                    VALUES (?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO users (name, email, password, role, student_id, hostel, room, gender, course, level, phone, meal_subscribed, laundry_subscribed, status)
+                    VALUES (?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         payload["name"],
@@ -1154,9 +1360,12 @@ def create_app():
                         payload["studentId"],
                         payload["hostel"],
                         payload.get("room", ""),
+                        payload.get("gender", ""),
                         payload["course"],
                         payload["level"],
                         payload.get("phone", ""),
+                        1 if payload.get("mealSubscribed", True) else 0,
+                        1 if payload.get("laundrySubscribed", True) else 0,
                         payload.get("status", "Active"),
                     ),
                 )
@@ -1167,13 +1376,14 @@ def create_app():
 
         student = query_one(
             """
-            SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
+            SELECT id, name, email, student_id AS studentId, hostel, room, gender, course, level, phone,
+                   photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
             FROM users
             WHERE id = ?
             """,
             (student_id,),
         )
-        return jsonify(student), 201
+        return jsonify(normalize_user_row(student)), 201
 
     @app.get("/api/staff")
     def staff():
@@ -1239,6 +1449,7 @@ def create_app():
         phone = payload.get("phone", "").strip()
         hostel = payload.get("hostel", "").strip()
         room = payload.get("room", "").strip()
+        gender = payload.get("gender", "").strip()
         if not name:
             return jsonify({"message": "Name is required."}), 400
 
@@ -1246,23 +1457,56 @@ def create_app():
             conn.execute(
                 """
                 UPDATE users
-                SET name = ?, phone = ?, hostel = ?, room = ?
+                SET name = ?, phone = ?, hostel = ?, room = ?, gender = ?
                 WHERE id = ?
                 """,
-                (name, phone, hostel, room, user_id),
+                (name, phone, hostel, room, gender, user_id),
             )
             log_action(conn, acting_user["name"], "updated profile", "user", str(user_id))
             conn.commit()
 
         row = query_one(
             """
-            SELECT id, name, email, role, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
+            SELECT id, name, email, role, student_id AS studentId, hostel, room, gender, course, level, phone,
+                   photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
             FROM users
             WHERE id = ?
             """,
             (user_id,),
         )
-        return jsonify(row)
+        return jsonify(normalize_user_row(row))
+
+    @app.patch("/api/users/<int:user_id>/subscriptions")
+    def update_user_subscription(user_id):
+        payload = request.get_json(silent=True) or {}
+        acting_user = current_user()
+        if acting_user["role"] != "admin" and int(acting_user["sub"]) != user_id:
+            return jsonify({"message": "You can only update your own subscriptions."}), 403
+
+        service = payload.get("service")
+        if service not in ("meals", "laundry"):
+            return jsonify({"message": "Subscription service must be meals or laundry."}), 400
+        subscribed = 1 if payload.get("subscribed") else 0
+        column = "meal_subscribed" if service == "meals" else "laundry_subscribed"
+        label = "Meal" if service == "meals" else "Laundry"
+
+        with get_connection() as conn:
+            user = conn.execute("SELECT id, role, student_id AS studentId FROM users WHERE id = ?", (user_id,)).fetchone()
+            if user is None:
+                return jsonify({"message": "User not found."}), 404
+            conn.execute(f"UPDATE users SET {column} = ? WHERE id = ?", (subscribed, user_id))
+            if user["studentId"]:
+                create_notification(
+                    conn,
+                    "student",
+                    f"{label} subscription updated",
+                    f"{label} service is now {'subscribed' if subscribed else 'unsubscribed'}.",
+                    user["studentId"],
+                )
+            log_action(conn, acting_user["name"], f"{'subscribed to' if subscribed else 'unsubscribed from'} {service}", "user", str(user_id))
+            conn.commit()
+
+        return jsonify(user_public_row(user_id))
 
     @app.post("/api/users/<int:user_id>/password")
     def change_password(user_id):
@@ -1310,12 +1554,14 @@ def create_app():
     def user_history(user_id):
         user = query_one(
             """
-            SELECT id, name, email, role, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
+            SELECT id, name, email, role, student_id AS studentId, hostel, room, gender, course, level, phone,
+                   photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
             FROM users
             WHERE id = ?
             """,
             (user_id,),
         )
+        user = normalize_user_row(user)
         if user is None:
             return jsonify({"message": "User not found."}), 404
 
@@ -1397,7 +1643,7 @@ def create_app():
     @app.put("/api/students/<int:user_id>")
     def update_student(user_id):
         payload = request.get_json(silent=True) or {}
-        required_fields = ["name", "email", "studentId", "hostel", "course", "level", "status"]
+        required_fields = ["name", "email", "studentId", "hostel", "gender", "course", "level", "status"]
         missing_fields = [field for field in required_fields if not payload.get(field)]
 
         if missing_fields:
@@ -1408,7 +1654,8 @@ def create_app():
                 result = conn.execute(
                     """
                     UPDATE users
-                    SET name = ?, email = ?, student_id = ?, hostel = ?, room = ?, course = ?, level = ?, phone = ?, status = ?
+                    SET name = ?, email = ?, student_id = ?, hostel = ?, room = ?, gender = ?, course = ?, level = ?, phone = ?,
+                        meal_subscribed = ?, laundry_subscribed = ?, status = ?
                     WHERE id = ? AND role = 'student'
                     """,
                     (
@@ -1417,9 +1664,12 @@ def create_app():
                         payload["studentId"],
                         payload["hostel"],
                         payload.get("room", ""),
+                        payload.get("gender", ""),
                         payload["course"],
                         payload["level"],
                         payload.get("phone", ""),
+                        1 if payload.get("mealSubscribed", True) else 0,
+                        1 if payload.get("laundrySubscribed", True) else 0,
                         payload["status"],
                         user_id,
                     ),
@@ -1434,13 +1684,14 @@ def create_app():
 
         student = query_one(
             """
-            SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
+            SELECT id, name, email, student_id AS studentId, hostel, room, gender, course, level, phone,
+                   photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
             FROM users
             WHERE id = ?
             """,
             (user_id,),
         )
-        return jsonify(student)
+        return jsonify(normalize_user_row(student))
 
     @app.delete("/api/students/<int:user_id>")
     def delete_student(user_id):
@@ -1462,14 +1713,15 @@ def create_app():
     def meals():
         return cached_json(
             "meals",
-            30,
-            lambda: query_all(
+            5,
+            lambda: [decorate_meal_row(row) for row in query_all(
                 """
                 SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status
                 FROM meals
+                WHERE type IN ('Breakfast', 'Dinner')
                 ORDER BY id
                 """
-            ),
+            )],
         )
 
     @app.post("/api/meals")
@@ -1480,20 +1732,23 @@ def create_app():
 
         if missing_fields:
             return jsonify({"message": f"Missing required fields: {', '.join(missing_fields)}."}), 400
+        meal_type = normalize_meal_type(payload["type"])
+        if not meal_type:
+            return jsonify({"message": "Only Breakfast and Dinner can be created. Lunch is not available."}), 400
 
         with get_connection() as conn:
             cursor = conn.execute(
                 "INSERT INTO meals (type, start_time, end_time, menu, status) VALUES (?, ?, ?, ?, ?)",
-                (payload["type"], payload["startTime"], payload["endTime"], payload["menu"], payload["status"]),
+                (meal_type, payload["startTime"], payload["endTime"], payload["menu"], payload["status"]),
             )
-            log_action(conn, "admin", "created", "meal", payload["type"])
+            log_action(conn, "admin", "created", "meal", meal_type)
             conn.commit()
             meal_id = cursor.lastrowid
 
-        meal = query_one(
+        meal = decorate_meal_row(query_one(
             "SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?",
             (meal_id,),
-        )
+        ))
         return jsonify(meal), 201
 
     @app.put("/api/meals/<int:meal_id>")
@@ -1504,6 +1759,9 @@ def create_app():
 
         if missing_fields:
             return jsonify({"message": f"Missing required fields: {', '.join(missing_fields)}."}), 400
+        meal_type = normalize_meal_type(payload["type"])
+        if not meal_type:
+            return jsonify({"message": "Only Breakfast and Dinner can be saved. Lunch is not available."}), 400
 
         with get_connection() as conn:
             result = conn.execute(
@@ -1512,18 +1770,18 @@ def create_app():
                 SET type = ?, start_time = ?, end_time = ?, menu = ?, status = ?
                 WHERE id = ?
                 """,
-                (payload["type"], payload["startTime"], payload["endTime"], payload["menu"], payload["status"], meal_id),
+                (meal_type, payload["startTime"], payload["endTime"], payload["menu"], payload["status"], meal_id),
             )
-            log_action(conn, "admin", "updated", "meal", payload["type"])
+            log_action(conn, "admin", "updated", "meal", meal_type)
             conn.commit()
 
         if result.rowcount == 0:
             return jsonify({"message": "Meal not found."}), 404
 
-        meal = query_one(
+        meal = decorate_meal_row(query_one(
             "SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?",
             (meal_id,),
-        )
+        ))
         return jsonify(meal)
 
     @app.delete("/api/meals/<int:meal_id>")
@@ -1766,6 +2024,11 @@ def create_app():
         payload = request.get_json(silent=True) or {}
         basket_code = payload.get("basketCode") or f"REQ{student_id[-4:]}"
         received_at = payload.get("receivedAt") or utc_now_text()
+        student = query_one("SELECT name, laundry_subscribed AS laundrySubscribed FROM users WHERE role = 'student' AND student_id = ?", (student_id,))
+        if student is None:
+            return jsonify({"message": "Student not found."}), 404
+        if not bool(student.get("laundrySubscribed", 1)):
+            return jsonify({"message": f"{student['name']} is not subscribed to laundry service."}), 403
 
         try:
             with get_connection() as conn:
@@ -1816,7 +2079,7 @@ def create_app():
 
         student = query_one(
             """
-            SELECT id, name, student_id AS studentId, status
+            SELECT id, name, student_id AS studentId, status, laundry_subscribed AS laundrySubscribed
             FROM users
             WHERE role = 'student' AND student_id = ?
             """,
@@ -1826,6 +2089,8 @@ def create_app():
             return jsonify({"message": "Student not found."}), 404
         if student["status"] != "Active":
             return jsonify({"message": f"{student['name']} is inactive."}), 403
+        if not bool(student.get("laundrySubscribed", 1)):
+            return jsonify({"message": f"{student['name']} is not subscribed to laundry service."}), 403
 
         with get_connection() as conn:
             existing = conn.execute(
@@ -2178,7 +2443,7 @@ def create_app():
     @app.get("/api/export/<kind>")
     def export_csv(kind):
         export_map = {
-            "students": ("students.csv", ["name", "studentId", "email", "hostel", "status"], query_all("SELECT name, student_id AS studentId, email, hostel, status FROM users WHERE role = 'student' ORDER BY name")),
+            "students": ("students.csv", ["name", "studentId", "email", "gender", "hostel", "mealSubscribed", "laundrySubscribed", "status"], query_all("SELECT name, student_id AS studentId, email, gender, hostel, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status FROM users WHERE role = 'student' ORDER BY name")),
             "meals": ("meals.csv", ["type", "startTime", "endTime", "menu", "status"], query_all("SELECT type, start_time AS startTime, end_time AS endTime, menu, status FROM meals ORDER BY id")),
             "baskets": ("laundry-baskets.csv", ["basketCode", "studentId", "status", "receivedAt"], query_all("SELECT basket_code AS basketCode, student_id AS studentId, status, received_at AS receivedAt FROM laundry_baskets ORDER BY id DESC")),
             "audits": ("audit-logs.csv", ["actor", "action", "entityType", "entityRef", "createdAt"], query_all("SELECT actor, action, entity_type AS entityType, entity_ref AS entityRef, created_at AS createdAt FROM audit_logs ORDER BY id DESC")),
@@ -2202,7 +2467,7 @@ def create_app():
         tables = [
             "users", "meals", "meal_scans", "laundry_baskets", "kitchen_scan_logs",
             "laundry_activity", "laundry_machines", "laundry_reports", "notifications",
-            "audit_logs", "user_preferences", "laundry_issues", "approval_requests",
+            "audit_logs", "user_preferences", "password_reset_tokens", "laundry_issues", "approval_requests",
         ]
         data = {table: query_all(f"SELECT * FROM {table}") for table in tables}
         data["generatedAt"] = int(time.time())
@@ -2228,10 +2493,24 @@ def create_app():
                 try:
                     conn.execute(
                         """
-                        INSERT INTO users (name, email, password, role, student_id, hostel, room, course, level, phone, status)
-                        VALUES (?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO users (name, email, password, role, student_id, hostel, room, gender, course, level, phone, meal_subscribed, laundry_subscribed, status)
+                        VALUES (?, ?, ?, 'student', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
-                        (row["name"], row["email"], demo_password, row["studentId"], row["hostel"], row.get("room", ""), row["course"], row["level"], row.get("phone", ""), row.get("status", "Active")),
+                        (
+                            row["name"],
+                            row["email"],
+                            demo_password,
+                            row["studentId"],
+                            row["hostel"],
+                            row.get("room", ""),
+                            row.get("gender", ""),
+                            row["course"],
+                            row["level"],
+                            row.get("phone", ""),
+                            0 if str(row.get("mealSubscribed", "true")).lower() in ("false", "0", "no") else 1,
+                            0 if str(row.get("laundrySubscribed", "true")).lower() in ("false", "0", "no") else 1,
+                            row.get("status", "Active"),
+                        ),
                     )
                     created += 1
                 except DB_INTEGRITY_ERROR:
@@ -2306,15 +2585,16 @@ def create_app():
     @app.get("/api/kitchen/dashboard")
     def kitchen_dashboard():
         def load_kitchen_dashboard():
-            current_meal = query_one(
+            meals_rows = query_all(
                 """
                 SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status
                 FROM meals
-                WHERE status = 'Active'
+                WHERE type IN ('Breakfast', 'Dinner')
                 ORDER BY id
-                LIMIT 1
                 """
             )
+            meals_today = [decorate_meal_row(row) for row in meals_rows]
+            current_meal = next((meal for meal in meals_today if meal["status"] == "Active"), None)
             recent_scans = query_all(
                 """
                 SELECT id, student_id AS studentId, meal_type AS mealType, scanned_time AS scannedTime, status
@@ -2323,7 +2603,7 @@ def create_app():
                 LIMIT 10
                 """
             )
-            total_expected = query_one("SELECT COUNT(*) AS count FROM users WHERE role = 'student'")["count"] * 3
+            total_expected = query_one("SELECT COUNT(*) AS count FROM users WHERE role = 'student' AND meal_subscribed = 1")["count"] * 2
             total_served = query_one("SELECT COUNT(*) AS count FROM meal_scans")["count"] + table_count_value("kitchen_scan_logs")
             return {
                 "currentMeal": current_meal,
@@ -2515,7 +2795,8 @@ def create_app():
         def load_student_overview():
             student = query_one(
                 """
-                SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
+                SELECT id, name, email, student_id AS studentId, hostel, room, gender, course, level, phone,
+                       photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
                 FROM users
                 WHERE role = 'student' AND student_id = ?
                 """,
@@ -2525,16 +2806,19 @@ def create_app():
             if student is None:
                 return None
 
+            student = normalize_user_row(student)
+            today = local_date_text()
             meals = query_all(
                 """
                 SELECT m.id, m.type, m.start_time AS startTime, m.end_time AS endTime, m.menu, m.status,
                        CASE WHEN ms.id IS NULL THEN 0 ELSE 1 END AS consumed,
                        ms.scanned_at AS scannedAt
                 FROM meals m
-                LEFT JOIN meal_scans ms ON ms.meal_id = m.id AND ms.student_id = ?
+                LEFT JOIN meal_scans ms ON ms.meal_id = m.id AND ms.student_id = ? AND ms.scan_date = ?
+                WHERE m.type IN ('Breakfast', 'Dinner')
                 ORDER BY m.id
                 """,
-                (student_id,),
+                (student_id, today),
             )
 
             laundry = query_all(
@@ -2547,7 +2831,7 @@ def create_app():
                 """,
                 (student_id,),
             )
-            return {"student": student, "meals": meals, "laundry": laundry}
+            return {"student": student, "meals": [decorate_meal_row(row) for row in meals], "laundry": laundry}
 
         overview = RESPONSE_CACHE.get(f"student_overview:{student_id}")
         if overview and overview["expires_at"] > time.time():
@@ -2600,25 +2884,29 @@ def create_app():
     @app.post("/api/meals/<int:meal_id>/scan")
     def scan_meal(meal_id):
         payload = request.get_json(silent=True) or {}
-        student_id = payload.get("studentId")
+        student_id = parse_student_id_from_scan(payload.get("studentId") or payload.get("qrPayload") or "")
 
         if not student_id:
             return jsonify({"message": "Student ID and meal ID are required."}), 400
 
         late_reason = payload.get("lateReason", "").strip()
-        meal = query_one("SELECT id, type, status FROM meals WHERE id = ?", (meal_id,))
+        meal = decorate_meal_row(query_one("SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?", (meal_id,)))
         if meal is None:
             return jsonify({"message": "Meal not found."}), 404
+        if meal["type"] not in ALLOWED_MEALS:
+            return jsonify({"message": "Only Breakfast and Dinner scanning is available."}), 400
         if meal["status"] != "Active" and not late_reason:
             return jsonify({"message": f"{meal['type']} is not currently active. Add a late/override reason to approve."}), 400
         student = query_one(
             """
-            SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
+            SELECT id, name, email, student_id AS studentId, hostel, room, gender, course, level, phone,
+                   photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
             FROM users
             WHERE role = 'student' AND student_id = ?
             """,
             (student_id,),
         )
+        student = normalize_user_row(student)
         if student is None:
             return jsonify({"message": "Student not found."}), 404
         if student["status"] != "Active":
@@ -2628,13 +2916,26 @@ def create_app():
                     INSERT INTO kitchen_scan_logs (student_id, meal_type, scanned_time, status)
                     VALUES (?, ?, ?, ?)
                     """,
-                    (student_id, meal["type"], utc_now_text(), "Denied (Inactive Student)"),
+                    (student_id, meal["type"], local_time_label(), "Denied (Inactive Student)"),
                 )
                 log_action(conn, "kitchen", "denied inactive student", "meal", f"{student_id}:{meal['type']}")
                 conn.commit()
             return jsonify({"message": f"{student['name']} is inactive and cannot be approved."}), 403
+        if not student.get("mealSubscribed", True):
+            with get_connection() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO kitchen_scan_logs (student_id, meal_type, scanned_time, status)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (student_id, meal["type"], local_time_label(), "Denied (Meal Unsubscribed)"),
+                )
+                log_action(conn, "kitchen", "denied unsubscribed student", "meal", f"{student_id}:{meal['type']}")
+                conn.commit()
+            return jsonify({"message": f"{student['name']} is not subscribed to meals."}), 403
 
-        existing = query_one("SELECT id FROM meal_scans WHERE student_id = ? AND meal_id = ?", (student_id, meal_id))
+        today = local_date_text()
+        existing = query_one("SELECT id FROM meal_scans WHERE student_id = ? AND meal_id = ? AND scan_date = ?", (student_id, meal_id, today))
         if existing is not None:
             with get_connection() as conn:
                 conn.execute(
@@ -2642,27 +2943,39 @@ def create_app():
                     INSERT INTO kitchen_scan_logs (student_id, meal_type, scanned_time, status)
                     VALUES (?, ?, ?, ?)
                     """,
-                    (student_id, meal["type"], utc_now_text(), "Denied (Already Scanned)"),
+                    (student_id, meal["type"], local_time_label(), "Denied (Already Scanned)"),
                 )
                 log_action(conn, "kitchen", "denied duplicate scan", "meal", f"{student_id}:{meal['type']}")
                 conn.commit()
-            return jsonify({"message": f"Already scanned for {meal['type']}."}), 409
+            return jsonify({"message": f"Already scanned for today's {meal['type']}."}), 409
 
+        scanned_at = utc_now_text()
+        ticket_code = f"HAMS-{meal['type'][:3].upper()}-{student_id}-{today.replace('-', '')}"
         with get_connection() as conn:
-            conn.execute("INSERT INTO meal_scans (student_id, meal_id) VALUES (?, ?)", (student_id, meal_id))
+            conn.execute("INSERT INTO meal_scans (student_id, meal_id, scan_date, scanned_at) VALUES (?, ?, ?, ?)", (student_id, meal_id, today, scanned_at))
             conn.execute(
                 """
                 INSERT INTO kitchen_scan_logs (student_id, meal_type, scanned_time, status)
                 VALUES (?, ?, ?, ?)
                 """,
-                (student_id, meal["type"], utc_now_text(), "Success"),
+                (student_id, meal["type"], local_time_label(), "Success"),
             )
             create_notification(conn, "student", "Meal approved", f"Your {meal['type']} scan was approved.", student_id)
             action = "approved scan" if meal["status"] == "Active" else f"approved override scan: {late_reason}"
             log_action(conn, current_user().get("name", "kitchen"), action, "meal", f"{student_id}:{meal['type']}")
             conn.commit()
 
-        return jsonify({"message": "Meal approved.", "studentId": student_id, "meal": meal, "student": student}), 201
+        ticket = {
+            "code": ticket_code,
+            "mealType": meal["type"],
+            "studentId": student_id,
+            "studentName": student["name"],
+            "serviceDate": today,
+            "scannedAt": scanned_at,
+            "validWindow": meal.get("windowLabel"),
+            "status": "Approved",
+        }
+        return jsonify({"message": "Meal approved.", "studentId": student_id, "meal": meal, "student": student, "ticket": ticket}), 201
 
     @app.get("/")
     def serve_frontend_index():

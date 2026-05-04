@@ -1,28 +1,60 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Shirt, CheckCircle2, AlertCircle } from "lucide-react";
-import { api, type LaundryBasket } from "@/src/lib/api";
+import { Button } from "@/src/components/ui/button";
+import { api, type LaundryBasket, type StudentOverview } from "@/src/lib/api";
+import { showToast } from "@/src/components/ui/toast";
 
 const timelineSteps = ["Pending Approval", "Pending", "Washing", "Ready", "Picked Up"];
 
 export default function Laundry() {
   const [records, setRecords] = useState<LaundryBasket[]>([]);
+  const [overview, setOverview] = useState<StudentOverview | null>(null);
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("hamsUser") || "{}");
     const studentId = storedUser.studentId || "240011223";
-    api.studentOverview(studentId).then((overview) => setRecords(overview.laundry)).catch(console.error);
+    api.studentOverview(studentId).then((data) => {
+      setOverview(data);
+      setRecords(data.laundry);
+    }).catch(console.error);
   }, []);
 
   const current = records[0];
   const pastRecords = records.slice(1);
   const currentStepIndex = current ? Math.max(0, timelineSteps.indexOf(current.status)) : -1;
+  const isSubscribed = overview?.student.laundrySubscribed !== false;
+
+  const toggleSubscription = async () => {
+    if (!overview?.student) return;
+    try {
+      const updated = await api.updateSubscription(overview.student.id, { service: "laundry", subscribed: !isSubscribed });
+      setOverview((currentOverview) => currentOverview ? { ...currentOverview, student: { ...currentOverview.student, ...updated } } : currentOverview);
+      localStorage.setItem("hamsUser", JSON.stringify(updated));
+      showToast(updated.laundrySubscribed ? "Laundry subscription activated." : "Laundry subscription paused.");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Unable to update laundry subscription.", "error");
+    }
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-neutral-900">Laundry History</h1>
       </div>
+
+      <section className={`rounded-3xl border p-5 shadow-sm ${isSubscribed ? "border-green-100 bg-green-50" : "border-amber-100 bg-amber-50"}`}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">Laundry service</p>
+            <h2 className="mt-1 text-xl font-black text-neutral-950">{isSubscribed ? "Subscribed" : "Unsubscribed"}</h2>
+            <p className="mt-1 text-sm font-medium text-neutral-600">Subscription controls whether you can request and process laundry drop-offs.</p>
+          </div>
+          <Button type="button" variant={isSubscribed ? "outline" : "default"} onClick={toggleSubscription}>
+            {isSubscribed ? "Unsubscribe Laundry" : "Subscribe Laundry"}
+          </Button>
+        </div>
+      </section>
 
       <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden">
         <div className="p-6 border-b border-neutral-100">

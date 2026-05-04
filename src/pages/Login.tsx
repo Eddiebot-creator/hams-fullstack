@@ -34,6 +34,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [resetLink, setResetLink] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,7 +175,13 @@ export default function Login() {
                 type="button"
                 onClick={async () => {
                   try {
+                    setResetLink("");
+                    if (!email.trim()) {
+                      showToast("Enter your account email first.", "error");
+                      return;
+                    }
                     const result = await api.requestPasswordReset({ email });
+                    if (result.resetLink) setResetLink(result.resetLink);
                     showToast(result.message);
                   } catch (err) {
                     showToast(err instanceof Error ? err.message : "Unable to request reset.", "error");
@@ -184,6 +191,15 @@ export default function Login() {
               >
                 Request password reset
               </button>
+
+              {resetLink && (
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm">
+                  <p className="font-semibold text-indigo-900">Reset link prepared for this account.</p>
+                  <a href={resetLink} className="mt-1 block break-all font-medium text-indigo-700 hover:text-indigo-900">
+                    {resetLink}
+                  </a>
+                </div>
+              )}
 
               <Button
                 type="submit"

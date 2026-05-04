@@ -10,9 +10,9 @@ import { showToast } from "@/src/components/ui/toast";
 import { ConfirmDialog } from "@/src/components/ui/confirm-dialog";
 
 const emptyForm = {
-  type: "",
-  startTime: "",
-  endTime: "",
+  type: "Breakfast",
+  startTime: "06:30 AM",
+  endTime: "08:45 AM",
   menu: "",
   status: "Upcoming",
 };
@@ -134,11 +134,17 @@ export default function AdminMeals() {
           <div className="p-6 space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-5">
               <label className="space-y-2">
-                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
-                  <UtensilsCrossed className="w-4 h-4 text-neutral-400" />
-                  Meal type
-                </span>
-                <Input required placeholder="Breakfast" value={form.type} onChange={(event) => updateForm("type", event.target.value)} />
+                <SelectMenu value={form.type} onChange={(value) => {
+                  updateForm("type", value);
+                  if (value === "Breakfast") {
+                    setForm((current) => ({ ...current, type: value, startTime: "06:30 AM", endTime: "08:45 AM" }));
+                  } else {
+                    setForm((current) => ({ ...current, type: value, startTime: "05:00 PM", endTime: "07:45 PM" }));
+                  }
+                }} label="Meal type" className="min-w-0" options={[
+                  { value: "Breakfast", label: "Breakfast", description: "6:30 AM - 8:45 AM" },
+                  { value: "Dinner", label: "Dinner", description: "5:00 PM - 7:45 PM" },
+                ]} />
               </label>
 
               <label className="space-y-2">

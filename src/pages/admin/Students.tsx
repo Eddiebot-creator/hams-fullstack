@@ -29,9 +29,12 @@ export default function AdminStudents() {
     email: "",
     hostel: "",
     room: "",
+    gender: "Male",
     course: "",
     level: "",
     phone: "",
+    mealSubscribed: true,
+    laundrySubscribed: true,
     status: "Active",
   });
 
@@ -59,7 +62,7 @@ export default function AdminStudents() {
   );
   const pagedStudents = paginate<Student>(filteredStudents, page, 8);
 
-  const updateForm = (field: keyof typeof form, value: string) => {
+  const updateForm = <K extends keyof typeof form>(field: K, value: (typeof form)[K]) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -70,9 +73,12 @@ export default function AdminStudents() {
       email: "",
       hostel: "",
       room: "",
+      gender: "Male",
       course: "",
       level: "",
       phone: "",
+      mealSubscribed: true,
+      laundrySubscribed: true,
       status: "Active",
     });
     setEditingId(null);
@@ -85,9 +91,12 @@ export default function AdminStudents() {
       email: student.email,
       hostel: student.hostel,
       room: student.room ?? "",
+      gender: student.gender || "Male",
       course: student.course,
       level: student.level,
       phone: student.phone ?? "",
+      mealSubscribed: student.mealSubscribed !== false,
+      laundrySubscribed: student.laundrySubscribed !== false,
       status: student.status,
     });
     setEditingId(student.id);
@@ -204,6 +213,13 @@ export default function AdminStudents() {
               </label>
 
               <label className="space-y-2">
+                <SelectMenu value={form.gender} onChange={(value) => updateForm("gender", value)} label="Gender" className="min-w-0" options={[
+                  { value: "Male", label: "Male", description: "Male student" },
+                  { value: "Female", label: "Female", description: "Female student" },
+                ]} />
+              </label>
+
+              <label className="space-y-2">
                 <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
                   <BookOpen className="w-4 h-4 text-neutral-400" />
                   Course
@@ -229,6 +245,16 @@ export default function AdminStudents() {
                   { value: "Active", label: "Active", description: "Can use services" },
                   { value: "Inactive", label: "Inactive", description: "Access paused" },
                 ]} />
+              </label>
+
+              <label className="flex items-center gap-3 rounded-xl border border-neutral-100 bg-neutral-50 p-3 text-sm font-semibold">
+                <input type="checkbox" checked={form.mealSubscribed} onChange={(event) => setForm({ ...form, mealSubscribed: event.target.checked })} />
+                Meal subscribed
+              </label>
+
+              <label className="flex items-center gap-3 rounded-xl border border-neutral-100 bg-neutral-50 p-3 text-sm font-semibold">
+                <input type="checkbox" checked={form.laundrySubscribed} onChange={(event) => setForm({ ...form, laundrySubscribed: event.target.checked })} />
+                Laundry subscribed
               </label>
             </div>
 
@@ -297,7 +323,16 @@ export default function AdminStudents() {
                 </span>
               </div>
               <p className="text-sm text-neutral-500 mt-3">{student.email}</p>
+              <p className="text-sm text-neutral-500">{student.gender || "Gender not set"}</p>
               <p className="text-sm text-neutral-500">{student.room ? `${student.hostel}, ${student.room}` : student.hostel}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${student.mealSubscribed !== false ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
+                  Meals {student.mealSubscribed !== false ? "Subscribed" : "Unsubscribed"}
+                </span>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${student.laundrySubscribed !== false ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
+                  Laundry {student.laundrySubscribed !== false ? "Subscribed" : "Unsubscribed"}
+                </span>
+              </div>
               <div className="flex gap-2 mt-4">
                 <Link to={`/admin/users/${student.id}`}>
                   <Button size="sm" variant="outline">History</Button>
@@ -320,6 +355,7 @@ export default function AdminStudents() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Student ID</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Email</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Hostel</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Services</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider">Actions</th>
               </tr>
@@ -331,6 +367,11 @@ export default function AdminStudents() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-mono">{student.studentId}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{student.email}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{student.room ? `${student.hostel}, ${student.room}` : student.hostel}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-xs font-semibold text-neutral-600">
+                    <span className={student.mealSubscribed !== false ? "text-green-700" : "text-amber-700"}>Meals {student.mealSubscribed !== false ? "On" : "Off"}</span>
+                    <span className="mx-2 text-neutral-300">/</span>
+                    <span className={student.laundrySubscribed !== false ? "text-green-700" : "text-amber-700"}>Laundry {student.laundrySubscribed !== false ? "On" : "Off"}</span>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                       student.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
