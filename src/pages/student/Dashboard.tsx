@@ -122,12 +122,14 @@ export default function Dashboard() {
           description="Breakfast and dinner QR ticket access"
           subscribed={mealSubscribed}
           onToggle={() => toggleSubscription("meals")}
+          lockWhenSubscribed
         />
         <ServiceCard
           title="Laundry"
           description="Drop-off requests and basket tracking"
           subscribed={laundrySubscribed}
           onToggle={() => toggleSubscription("laundry")}
+          lockWhenSubscribed
         />
       </section>
 
@@ -212,7 +214,19 @@ export default function Dashboard() {
   );
 }
 
-function ServiceCard({ title, description, subscribed, onToggle }: { title: string; description: string; subscribed: boolean; onToggle: () => void }) {
+function ServiceCard({
+  title,
+  description,
+  subscribed,
+  onToggle,
+  lockWhenSubscribed = false,
+}: {
+  title: string;
+  description: string;
+  subscribed: boolean;
+  onToggle: () => void;
+  lockWhenSubscribed?: boolean;
+}) {
   return (
     <div className={`rounded-3xl border p-4 shadow-sm ${subscribed ? "border-green-100 bg-green-50" : "border-amber-100 bg-amber-50"}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -221,9 +235,15 @@ function ServiceCard({ title, description, subscribed, onToggle }: { title: stri
           <p className="mt-1 text-lg font-black text-neutral-950">{subscribed ? "Subscribed" : "Unsubscribed"}</p>
           <p className="mt-1 text-sm font-medium text-neutral-600">{description}</p>
         </div>
-        <Button type="button" variant={subscribed ? "outline" : "default"} onClick={onToggle}>
-          {subscribed ? `Unsubscribe ${title}` : `Subscribe ${title}`}
-        </Button>
+        {subscribed && lockWhenSubscribed ? (
+          <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-green-800">
+            Subscribed
+          </span>
+        ) : (
+          <Button type="button" variant={subscribed ? "outline" : "default"} onClick={onToggle}>
+            {subscribed ? `Unsubscribe ${title}` : `Subscribe ${title}`}
+          </Button>
+        )}
       </div>
     </div>
   );

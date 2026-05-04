@@ -567,4 +567,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ studentId, lateReason, qrPayload }),
     }),
+  claimMeal: (studentId: string, mealId: number) =>
+    request<{ message: string; studentId: string; meal: Meal; student: Student; ticket: MealTicket }>(`/student/${studentId}/claim-meal`, {
+      method: "POST",
+      body: JSON.stringify({ mealId }),
+    }),
 };

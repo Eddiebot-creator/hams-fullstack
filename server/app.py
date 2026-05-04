@@ -2977,6 +2977,80 @@ def create_app():
         }
         return jsonify({"message": "Meal approved.", "studentId": student_id, "meal": meal, "student": student, "ticket": ticket}), 201
 
+    @app.post("/api/student/<student_id>/claim-meal")
+    def claim_meal(student_id):
+        payload = request.get_json(silent=True) or {}
+        meal_id = payload.get("mealId")
+        if meal_id is None:
+            return jsonify({"message": "Meal ID is required."}), 400
+
+        try:
+            meal_id = int(meal_id)
+        except (TypeError, ValueError):
+            return jsonify({"message": "Meal ID must be a number."}), 400
+
+        acting_user = current_user()
+        if acting_user["role"] != "admin":
+            if acting_user["role"] != "student" or str(acting_user.get("studentId") or "") != str(student_id):
+                return jsonify({"message": "You can only claim your own meal ticket."}), 403
+
+        meal = decorate_meal_row(query_one("SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?", (meal_id,)))
+        if meal is None:
+            return jsonify({"message": "Meal not found."}), 404
+        if meal["type"] not in ALLOWED_MEALS:
+            return jsonify({"message": "Only Breakfast and Dinner claiming is available."}), 400
+        if meal["status"] != "Active":
+            return jsonify({"message": f"{meal['type']} is not active right now."}), 400
+
+        student = query_one(
+            """
+            SELECT id, name, email, student_id AS studentId, hostel, room, gender, course, level, phone,
+                   photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
+            FROM users
+            WHERE role = 'student' AND student_id = ?
+            """,
+            (student_id,),
+        )
+        student = normalize_user_row(student)
+        if student is None:
+            return jsonify({"message": "Student not found."}), 404
+        if student["status"] != "Active":
+            return jsonify({"message": f"{student['name']} is inactive and cannot claim meals."}), 403
+        if not student.get("mealSubscribed", True):
+            return jsonify({"message": f"{student['name']} is not subscribed to meals."}), 403
+
+        today = local_date_text()
+        existing = query_one("SELECT id FROM meal_scans WHERE student_id = ? AND meal_id = ? AND scan_date = ?", (student_id, meal_id, today))
+        if existing is not None:
+            return jsonify({"message": f"{meal['type']} was already claimed for today."}), 409
+
+        scanned_at = utc_now_text()
+        ticket_code = f"HAMS-{meal['type'][:3].upper()}-{student_id}-{today.replace('-', '')}"
+        with get_connection() as conn:
+            conn.execute("INSERT INTO meal_scans (student_id, meal_id, scan_date, scanned_at) VALUES (?, ?, ?, ?)", (student_id, meal_id, today, scanned_at))
+            conn.execute(
+                """
+                INSERT INTO kitchen_scan_logs (student_id, meal_type, scanned_time, status)
+                VALUES (?, ?, ?, ?)
+                """,
+                (student_id, meal["type"], local_time_label(), "Claimed (Student Hold)"),
+            )
+            create_notification(conn, "student", "Meal claimed", f"You claimed {meal['type']} successfully.", student_id)
+            log_action(conn, acting_user.get("name", "student"), "claimed meal ticket", "meal", f"{student_id}:{meal['type']}")
+            conn.commit()
+
+        ticket = {
+            "code": ticket_code,
+            "mealType": meal["type"],
+            "studentId": student_id,
+            "studentName": student["name"],
+            "serviceDate": today,
+            "scannedAt": scanned_at,
+            "validWindow": meal.get("windowLabel"),
+            "status": "Claimed",
+        }
+        return jsonify({"message": "Meal claimed.", "studentId": student_id, "meal": meal, "student": student, "ticket": ticket}), 201
+
     @app.get("/")
     def serve_frontend_index():
         if not STATIC_DIR.exists():

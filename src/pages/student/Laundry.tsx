@@ -25,13 +25,13 @@ export default function Laundry() {
   const currentStepIndex = current ? Math.max(0, timelineSteps.indexOf(current.status)) : -1;
   const isSubscribed = overview?.student.laundrySubscribed !== false;
 
-  const toggleSubscription = async () => {
+  const subscribeLaundry = async () => {
     if (!overview?.student) return;
     try {
-      const updated = await api.updateSubscription(overview.student.id, { service: "laundry", subscribed: !isSubscribed });
+      const updated = await api.updateSubscription(overview.student.id, { service: "laundry", subscribed: true });
       setOverview((currentOverview) => currentOverview ? { ...currentOverview, student: { ...currentOverview.student, ...updated } } : currentOverview);
       localStorage.setItem("hamsUser", JSON.stringify(updated));
-      showToast(updated.laundrySubscribed ? "Laundry subscription activated." : "Laundry subscription paused.");
+      showToast("Laundry subscription activated.");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Unable to update laundry subscription.", "error");
     }
@@ -50,9 +50,15 @@ export default function Laundry() {
             <h2 className="mt-1 text-xl font-black text-neutral-950">{isSubscribed ? "Subscribed" : "Unsubscribed"}</h2>
             <p className="mt-1 text-sm font-medium text-neutral-600">Subscription controls whether you can request and process laundry drop-offs.</p>
           </div>
-          <Button type="button" variant={isSubscribed ? "outline" : "default"} onClick={toggleSubscription}>
-            {isSubscribed ? "Unsubscribe Laundry" : "Subscribe Laundry"}
-          </Button>
+          {isSubscribed ? (
+            <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-green-800">
+              Subscribed
+            </span>
+          ) : (
+            <Button type="button" variant="default" onClick={subscribeLaundry}>
+              Subscribe Laundry
+            </Button>
+          )}
         </div>
       </section>
 

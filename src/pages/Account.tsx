@@ -303,9 +303,15 @@ function ServiceSubscription({ title, subscribed, onToggle }: { title: string; s
     <div className={`rounded-2xl border p-4 ${subscribed ? "border-green-100 bg-green-50" : "border-amber-100 bg-amber-50"}`}>
       <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">{title}</p>
       <p className="mt-1 text-lg font-black text-neutral-950">{subscribed ? "Subscribed" : "Unsubscribed"}</p>
-      <Button type="button" variant={subscribed ? "outline" : "default"} className="mt-3 w-full" onClick={onToggle}>
-        {subscribed ? `Unsubscribe ${title}` : `Subscribe ${title}`}
-      </Button>
+      {subscribed ? (
+        <span className="mt-3 inline-flex w-full items-center justify-center rounded-full bg-green-100 px-3 py-2 text-xs font-bold uppercase tracking-wide text-green-800">
+          Subscribed
+        </span>
+      ) : (
+        <Button type="button" variant="default" className="mt-3 w-full" onClick={onToggle}>
+          {`Subscribe ${title}`}
+        </Button>
+      )}
     </div>
   );
 }

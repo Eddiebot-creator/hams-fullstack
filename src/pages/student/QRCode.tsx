@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { Clock3, QrCode as QrIcon, RefreshCw, TicketCheck, UtensilsCrossed } from "lucide-react";
+import { CheckCircle2, Clock3, QrCode as QrIcon, RefreshCw, TicketCheck, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { api, type Meal, type StudentOverview } from "@/src/lib/api";
 import { showToast } from "@/src/components/ui/toast";
@@ -34,27 +34,92 @@ export default function QRCode() {
   const storedUser = useMemo(() => JSON.parse(localStorage.getItem("hamsUser") || "{}"), []);
   const [overview, setOverview] = useState<StudentOverview | null>(null);
   const [nonce, setNonce] = useState(Date.now());
+  const [isHoldingClaim, setIsHoldingClaim] = useState(false);
+  const [holdProgress, setHoldProgress] = useState(0);
+  const [isClaiming, setIsClaiming] = useState(false);
+  const holdTimeoutRef = useRef<number | null>(null);
+  const holdIntervalRef = useRef<number | null>(null);
   const studentId = overview?.student.studentId || storedUser.studentId || "240011223";
   const activeMeal = activeMealByTime(overview?.meals ?? []);
+  const activeUnclaimedMeal = activeMeal && !activeMeal.consumed ? activeMeal : null;
   const isSubscribed = overview?.student.mealSubscribed !== false;
   const today = new Date().toISOString().slice(0, 10);
-  const qrPayload = activeMeal ? `HAMS-MEAL:${activeMeal.type}:${studentId}:${today}:${nonce}` : "";
+  const mealStatus = activeMeal ? "Active" : "Inactive";
+  const qrMealType = activeMeal?.type ?? "Inactive";
+  const qrPayload = isSubscribed ? `HAMS-MEAL:${qrMealType}:${studentId}:${today}:${nonce}` : "";
   const qrData = encodeURIComponent(qrPayload);
 
   useEffect(() => {
     api.studentOverview(studentId).then(setOverview).catch(console.error);
   }, [studentId]);
 
-  const toggleMealSubscription = async () => {
+  useEffect(() => () => {
+    if (holdTimeoutRef.current) window.clearTimeout(holdTimeoutRef.current);
+    if (holdIntervalRef.current) window.clearInterval(holdIntervalRef.current);
+  }, []);
+
+  const subscribeMeals = async () => {
     if (!overview?.student) return;
     try {
-      const updated = await api.updateSubscription(overview.student.id, { service: "meals", subscribed: !isSubscribed });
+      const updated = await api.updateSubscription(overview.student.id, { service: "meals", subscribed: true });
       setOverview((current) => current ? { ...current, student: { ...current.student, ...updated } } : current);
       localStorage.setItem("hamsUser", JSON.stringify(updated));
-      showToast(updated.mealSubscribed ? "Meal subscription activated." : "Meal subscription paused.");
+      showToast("Meal subscription activated.");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Unable to update meal subscription.", "error");
     }
+  };
+
+  const resetHold = () => {
+    if (holdTimeoutRef.current) {
+      window.clearTimeout(holdTimeoutRef.current);
+      holdTimeoutRef.current = null;
+    }
+    if (holdIntervalRef.current) {
+      window.clearInterval(holdIntervalRef.current);
+      holdIntervalRef.current = null;
+    }
+    setIsHoldingClaim(false);
+    setHoldProgress(0);
+  };
+
+  const claimMeal = async () => {
+    if (!activeUnclaimedMeal || isClaiming) return;
+    setIsClaiming(true);
+    try {
+      const result = await api.claimMeal(studentId, activeUnclaimedMeal.id);
+      setOverview((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          meals: current.meals.map((meal) => (
+            meal.id === activeUnclaimedMeal.id
+              ? { ...meal, consumed: 1, scannedAt: result.ticket.scannedAt, status: "Claimed" }
+              : meal
+          )),
+        };
+      });
+      showToast("MEAL CLAIMED");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Unable to claim meal ticket.", "error");
+    } finally {
+      setIsClaiming(false);
+      resetHold();
+    }
+  };
+
+  const startHoldToClaim = () => {
+    if (!activeUnclaimedMeal || isClaiming || isHoldingClaim) return;
+    setIsHoldingClaim(true);
+    setHoldProgress(0);
+    const startedAt = Date.now();
+    holdIntervalRef.current = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      setHoldProgress(Math.min(100, (elapsed / 1200) * 100));
+    }, 30);
+    holdTimeoutRef.current = window.setTimeout(() => {
+      void claimMeal();
+    }, 1200);
   };
 
   return (
@@ -70,9 +135,9 @@ export default function QRCode() {
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700">
             <QrIcon className="h-7 w-7" />
           </div>
-          {(overview?.student?.profilePhoto || storedUser?.profilePhoto) ? (
+          {(overview?.student?.photoUrl || storedUser?.photoUrl) ? (
             <img
-              src={overview?.student?.profilePhoto || storedUser?.profilePhoto}
+              src={overview?.student?.photoUrl || storedUser?.photoUrl}
               alt="Profile"
               className="h-14 w-14 rounded-2xl object-cover border-2 border-indigo-100 shadow-sm"
             />
@@ -91,36 +156,91 @@ export default function QRCode() {
               <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">Meal subscription</p>
               <p className="mt-1 text-lg font-black text-neutral-950">{isSubscribed ? "Subscribed" : "Unsubscribed"}</p>
             </div>
-            <Button type="button" variant={isSubscribed ? "outline" : "default"} onClick={toggleMealSubscription}>
-              {isSubscribed ? "Unsubscribe Meals" : "Subscribe Meals"}
-            </Button>
+            {!isSubscribed ? (
+              <Button type="button" variant="default" onClick={subscribeMeals}>
+                Subscribe Meals
+              </Button>
+            ) : (
+              <span className="inline-flex items-center gap-2 rounded-full bg-green-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-green-800">
+                <CheckCircle2 className="h-4 w-4" />
+                Subscribed
+              </span>
+            )}
           </div>
         </div>
 
-        {isSubscribed && activeMeal ? (
+        {isSubscribed ? (
           <>
-            <div className="mx-auto mt-8 inline-block rounded-3xl border-2 border-indigo-100 bg-white p-4 shadow-sm relative">
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${qrData}`}
-                alt={`${activeMeal.type} QR Code`}
-                className="h-64 w-64 rounded-2xl"
-              />
+            {activeMeal?.consumed ? (
               <motion.div
-                animate={{ y: [0, 250, 0] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                className="absolute left-4 right-4 top-4 z-10 h-1 bg-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.8)]"
-              />
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mx-auto mt-8 max-w-md rounded-3xl border-2 border-green-200 bg-green-50 p-8 text-center"
+              >
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-green-700">Ticket complete</p>
+                <p className="mt-2 text-4xl font-black text-green-900">MEAL CLAIMED</p>
+                <p className="mt-3 text-sm font-semibold text-green-800">This meal ticket has been consumed and cannot be reused.</p>
+              </motion.div>
+            ) : (
+              <div className="mx-auto mt-8 inline-block rounded-3xl border-2 border-indigo-100 bg-white p-4 shadow-sm relative">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${qrData}`}
+                  alt={`${qrMealType} QR Code`}
+                  className="h-64 w-64 rounded-2xl"
+                />
+                {activeUnclaimedMeal ? (
+                  <motion.div
+                    animate={{ y: [0, 250, 0] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                    className="absolute left-4 right-4 top-4 z-10 h-1 bg-green-500/70 shadow-[0_0_10px_rgba(34,197,94,0.9)]"
+                  />
+                ) : null}
+              </div>
+            )}
+            <div className="mt-4 flex justify-center">
+              <span
+                className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
+                  mealStatus === "Active" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"
+                }`}
+              >
+                QR Status: {mealStatus}
+              </span>
             </div>
+
+            {activeUnclaimedMeal ? (
+              <div className="mx-auto mt-5 max-w-md">
+                <Button
+                  type="button"
+                  onMouseDown={startHoldToClaim}
+                  onMouseUp={resetHold}
+                  onMouseLeave={resetHold}
+                  onTouchStart={startHoldToClaim}
+                  onTouchEnd={resetHold}
+                  onTouchCancel={resetHold}
+                  disabled={isClaiming}
+                  className="h-14 w-full bg-green-600 text-base font-black text-white hover:bg-green-700"
+                >
+                  {isClaiming ? "Claiming..." : "Hold when receiving food"}
+                </Button>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-neutral-100">
+                  <div className="h-full rounded-full bg-green-600 transition-all duration-75" style={{ width: `${holdProgress}%` }} />
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4 text-left">
                 <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">Student ID</p>
                 <p className="mt-1 font-mono text-xl font-black tracking-widest text-neutral-900">{studentId}</p>
               </div>
-              <div className="rounded-2xl border border-green-100 bg-green-50 p-4 text-left">
-                <p className="text-xs font-bold uppercase tracking-wide text-green-700">Active ticket</p>
-                <p className="mt-1 text-xl font-black text-green-900">{activeMeal.type}</p>
-                <p className="text-sm font-semibold text-green-700">{activeMeal.windowLabel || mealWindows.find((item) => item.type === activeMeal.type)?.label}</p>
+              <div className={`rounded-2xl border p-4 text-left ${mealStatus === "Active" ? "border-green-100 bg-green-50" : "border-amber-100 bg-amber-50"}`}>
+                <p className={`text-xs font-bold uppercase tracking-wide ${mealStatus === "Active" ? "text-green-700" : "text-amber-700"}`}>Ticket status</p>
+                <p className={`mt-1 text-xl font-black ${mealStatus === "Active" ? "text-green-900" : "text-amber-900"}`}>{mealStatus}</p>
+                <p className={`text-sm font-semibold ${mealStatus === "Active" ? "text-green-700" : "text-amber-700"}`}>
+                  {activeMeal
+                    ? (activeMeal.windowLabel || mealWindows.find((item) => item.type === activeMeal.type)?.label)
+                    : nextWindowLabel()}
+                </p>
               </div>
             </div>
 
@@ -133,10 +253,10 @@ export default function QRCode() {
           <div className="mt-8 rounded-3xl border border-dashed border-neutral-200 bg-neutral-50 p-8">
             <TicketCheck className="mx-auto h-12 w-12 text-neutral-400" />
             <p className="mt-4 text-lg font-black text-neutral-950">
-              {!isSubscribed ? "Meal QR is paused" : "No meal QR available now"}
+              Meal QR is paused
             </p>
             <p className="mt-2 text-sm font-medium text-neutral-500">
-              {!isSubscribed ? "Subscribe to meals to generate breakfast and dinner QR tickets." : nextWindowLabel()}
+              Subscribe to meals to generate your breakfast and dinner QR ticket.
             </p>
           </div>
         )}
