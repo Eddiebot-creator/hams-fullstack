@@ -29,20 +29,7 @@ export default function KitchenDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Link to="/kitchen/scanner">
-          <Button className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white">
-            <ScanLine className="w-4 h-4" />
-            Open Meal Scanner
-          </Button>
-        </Link>
-        <Link to="/kitchen/notifications">
-          <Button variant="outline" className="w-full h-12">
-            <Bell className="w-4 h-4" />
-            View Updates
-          </Button>
-        </Link>
-      </div>
+
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <motion.div

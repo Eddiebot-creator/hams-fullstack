@@ -114,12 +114,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <QuickAction to="/student/qr" icon={QrCode} label="My QR" tone="bg-indigo-600 text-white border-indigo-600" />
-        <QuickAction to="/student/laundry" icon={Shirt} label="Laundry" tone="bg-sky-50 text-sky-700 border-sky-100" />
-        <QuickAction to="/student/notifications" icon={Bell} label={`Updates${unreadCount ? ` (${unreadCount})` : ""}`} tone="bg-amber-50 text-amber-700 border-amber-100" />
-        <QuickAction to="/student/account" icon={Moon} label="Settings" tone="bg-emerald-50 text-emerald-700 border-emerald-100" />
-      </div>
+
 
       <section className="grid gap-3 md:grid-cols-2">
         <ServiceCard

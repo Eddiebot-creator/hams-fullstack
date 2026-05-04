@@ -37,26 +37,7 @@ export default function LaundryDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Link to="/laundry-staff/scanner">
-          <Button className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white">
-            <ScanLine className="w-4 h-4" />
-            Scanner
-          </Button>
-        </Link>
-        <Link to="/laundry-staff/board">
-          <Button variant="outline" className="w-full h-12">
-            <Columns3 className="w-4 h-4" />
-            Workflow Board
-          </Button>
-        </Link>
-        <Link to="/laundry-staff/issues">
-          <Button variant="outline" className="w-full h-12">
-            <AlertCircle className="w-4 h-4" />
-            Report Issue
-          </Button>
-        </Link>
-      </div>
+
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <motion.div
