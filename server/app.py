@@ -183,39 +183,39 @@ def reset_base_url():
 
 
 def send_password_reset_email(recipient, name, reset_link):
-    smtp_host = os.environ.get("SMTP_HOST")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    smtp_username = os.environ.get("SMTP_USERNAME")
-    smtp_password = os.environ.get("SMTP_PASSWORD")
-    sender = os.environ.get("MAIL_FROM") or smtp_username
+    import urllib.request
+    resend_api_key = os.environ.get("RESEND_API_KEY")
+    sender = os.environ.get("MAIL_FROM", "onboarding@resend.dev")
 
-    if not smtp_host or not sender:
+    if not resend_api_key:
         return False, "Email sending is not configured."
 
-    message = EmailMessage()
-    message["Subject"] = "Reset your HAMS password"
-    message["From"] = sender
-    message["To"] = recipient
-    message.set_content(
-        "\n".join(
-            [
-                f"Hello {name},",
-                "",
-                "Use this link to reset your HAMS password:",
-                reset_link,
-                "",
-                "This link expires in 1 hour. If you did not request it, you can ignore this email.",
-            ]
-        )
-    )
+    payload = json.dumps({
+        "from": sender,
+        "to": [recipient],
+        "subject": "Reset your HAMS password",
+        "text": "\n".join([
+            f"Hello {name},",
+            "",
+            "Use this link to reset your HAMS password:",
+            reset_link,
+            "",
+            "This link expires in 1 hour. If you did not request it, you can ignore this email.",
+        ]),
+    }).encode()
 
     try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as smtp:
-            if os.environ.get("SMTP_USE_TLS", "1") != "0":
-                smtp.starttls()
-            if smtp_username and smtp_password:
-                smtp.login(smtp_username, smtp_password)
-            smtp.send_message(message)
+        req = urllib.request.Request(
+            "https://api.resend.com/emails",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {resend_api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as response:
+            response.read()
         return True, "Reset link sent to your email."
     except Exception as exc:
         return False, f"Unable to send reset email: {exc}"
