@@ -180,7 +180,12 @@ export default function Login() {
                       showToast("Enter your account email first.", "error");
                       return;
                     }
-                    const result = await api.requestPasswordReset({ email });
+                    const res = await fetch("/api/auth/request-password-reset", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ email }),
+                    });
+                    const result = await res.json();
                     if (result.resetLink) setResetLink(result.resetLink);
                     showToast(result.message);
                   } catch (err) {
@@ -189,7 +194,7 @@ export default function Login() {
                 }}
                 className="text-sm font-semibold text-indigo-700 hover:text-indigo-900"
               >
-                Request password reset
+                Forgot password?
               </button>
 
               {resetLink && (
