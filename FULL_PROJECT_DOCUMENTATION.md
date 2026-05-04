@@ -6,39 +6,69 @@ HAMS - Hostel Attendance Management System
 
 ## Project Summary
 
-HAMS is a web application for managing hostel-related student services. It includes meal attendance, laundry tracking, student records, and dashboards for different user roles.
+HAMS is a full stack hostel service web app for managing student meals, QR scanning, laundry requests, basket tracking, reports, notifications, user accounts, and admin operations.
 
-The system has two main parts:
+The system is built as:
 
-- Frontend: React, Vite, TypeScript, Tailwind CSS
-- Backend: Flask, Python, SQLite
+```text
+React frontend
+Flask backend
+MySQL production database
+SQLite local fallback database
+```
 
-The frontend displays the user interface. The backend stores and provides data through API endpoints. The frontend and backend are connected through HTTP requests.
+The frontend shows role-based dashboards and forms. The backend stores records, checks permissions, and returns live data through API endpoints.
 
 ## User Roles
 
-The application supports four roles:
-
 ```text
 Student
-Kitchen Staff
-Laundry Staff
+Kitchen staff
+Laundry staff
 Admin
 ```
 
-Each role has its own section in the frontend.
+Each role has its own dashboard, routes, actions, navigation, notifications, and account settings.
 
-## Full Project Structure
+## Architecture
+
+```text
+User browser
+    |
+    v
+React + Vite frontend
+    |
+    v
+src/lib/api.ts
+    |
+    v
+Flask API in server/app.py
+    |
+    v
+MySQL on Aiven in production
+or SQLite locally when DATABASE_URL is missing
+```
+
+In production, Flask also serves the built React app from `dist/`.
+
+## Project Structure
 
 ```text
 myadds-main/
   index.html
   package.json
+  package-lock.json
   requirements.txt
+  runtime.txt
+  render.yaml
   README.md
   BACKEND_DOCUMENTATION.md
+  DEPLOYMENT_GUIDE.md
   FULL_PROJECT_DOCUMENTATION.md
-  logo.jpg
+
+  public/
+    manifest.webmanifest
+    sw.js
 
   server/
     app.py
@@ -46,24 +76,42 @@ myadds-main/
       hams.sqlite
 
   src/
-    main.tsx
     App.tsx
+    main.tsx
     index.css
 
     lib/
       api.ts
+      image.ts
+      pagination.ts
+      theme.ts
       utils.ts
 
     components/
       layout/
+        GlobalSearch.tsx
+        InstallPrompt.tsx
         Layout.tsx
+        NetworkStatus.tsx
+        RoleTips.tsx
+      scanner/
+        CameraQrScanner.tsx
       ui/
         button.tsx
+        confirm-dialog.tsx
+        empty-state.tsx
         input.tsx
         label.tsx
+        password-input.tsx
+        select-menu.tsx
+        skeleton.tsx
+        toast.tsx
 
     pages/
       Login.tsx
+      ResetPassword.tsx
+      Account.tsx
+      Notifications.tsx
 
       student/
         Dashboard.tsx
@@ -78,6 +126,8 @@ myadds-main/
       laundry/
         Dashboard.tsx
         Baskets.tsx
+        Board.tsx
+        Issues.tsx
         Reports.tsx
         Scanner.tsx
 
@@ -85,367 +135,286 @@ myadds-main/
         Dashboard.tsx
         Meals.tsx
         Students.tsx
+        Staff.tsx
         Analytics.tsx
+        Audit.tsx
+        Approvals.tsx
+        Tools.tsx
+        UserHistory.tsx
 ```
 
 ## Frontend Overview
 
-The frontend is built with:
+Frontend technology:
 
 ```text
 React
 TypeScript
 Vite
-Tailwind CSS
 React Router
 Lucide React Icons
+Custom responsive CSS
 ```
 
-The frontend runs on:
+Main styling file:
 
 ```text
-http://localhost:3000
+src/index.css
 ```
 
-## Main Frontend Entry Files
-
-### src/main.tsx
-
-This is the frontend entry point. It renders the React application into the page.
-
-### src/App.tsx
-
-This file defines the application routes.
-
-Main routes:
+Main route file:
 
 ```text
-/login
-/student
-/student/qr
-/student/laundry
-/student/profile
-/kitchen
-/kitchen/scanner
-/laundry-staff
-/laundry-staff/baskets
-/laundry-staff/reports
-/laundry-staff/scanner
-/admin
-/admin/meals
-/admin/students
-/admin/analytics
+src/App.tsx
 ```
 
-## Frontend Layout
-
-The shared page layout is located in:
-
-```text
-src/components/layout/Layout.tsx
-```
-
-This component provides the layout for dashboard pages, including navigation based on the user role.
-
-## Frontend UI Components
-
-Reusable UI components are located in:
-
-```text
-src/components/ui/
-```
-
-Important files:
-
-```text
-button.tsx
-input.tsx
-label.tsx
-```
-
-These components are used across login forms, search inputs, tables, and action buttons.
-
-## Login Page
-
-File:
-
-```text
-src/pages/Login.tsx
-```
-
-The login page allows the user to select a role:
-
-```text
-Student
-Kitchen
-Laundry
-Admin
-```
-
-When the user signs in, the frontend sends a login request to the backend:
-
-```text
-POST http://localhost:4000/api/auth/login
-```
-
-If login succeeds, the user is redirected to the correct dashboard.
-
-## Student Frontend Pages
-
-### Student Dashboard
-
-File:
-
-```text
-src/pages/student/Dashboard.tsx
-```
-
-Displays:
-
-- Today's meals
-- Meal status
-- Laundry status
-- Recent laundry activity
-
-Backend data source:
-
-```text
-GET /api/student/<student_id>/overview
-```
-
-### Student Laundry
-
-File:
-
-```text
-src/pages/student/Laundry.tsx
-```
-
-Displays:
-
-- Current basket status
-- Past laundry records
-
-Backend data source:
-
-```text
-GET /api/student/<student_id>/overview
-```
-
-### Student Profile
-
-File:
-
-```text
-src/pages/student/Profile.tsx
-```
-
-Displays:
-
-- Name
-- Email
-- Phone
-- Hostel
-- Student ID
-- Course and level
-
-Backend data source:
-
-```text
-GET /api/student/<student_id>/overview
-```
-
-### Student QR Code
-
-File:
-
-```text
-src/pages/student/QRCode.tsx
-```
-
-Displays a QR code interface for student identification.
-
-## Kitchen Frontend Pages
-
-### Kitchen Dashboard
-
-File:
-
-```text
-src/pages/kitchen/Dashboard.tsx
-```
-
-Displays kitchen service information.
-
-### Meal Scanner
-
-File:
-
-```text
-src/pages/kitchen/Scanner.tsx
-```
-
-The scanner page simulates meal scanning.
-
-It sends scan requests to:
-
-```text
-POST /api/meals/<meal_id>/scan
-```
-
-If the meal was not already scanned, the backend approves it.
-
-If the meal was already scanned, the backend denies it.
-
-## Laundry Staff Frontend Pages
-
-### Laundry Dashboard
-
-File:
-
-```text
-src/pages/laundry/Dashboard.tsx
-```
-
-Displays laundry staff overview information.
-
-### Manage Baskets
-
-File:
-
-```text
-src/pages/laundry/Baskets.tsx
-```
-
-Displays laundry basket records from the backend.
-
-Backend data source:
-
-```text
-GET /api/laundry/baskets
-```
-
-### Laundry Reports
-
-File:
-
-```text
-src/pages/laundry/Reports.tsx
-```
-
-Displays laundry reporting interface.
-
-### Laundry Scanner
-
-File:
-
-```text
-src/pages/laundry/Scanner.tsx
-```
-
-Displays laundry scanner interface.
-
-## Admin Frontend Pages
-
-### Admin Dashboard
-
-File:
-
-```text
-src/pages/admin/Dashboard.tsx
-```
-
-Displays admin summary cards and system alerts.
-
-### Manage Meals
-
-File:
-
-```text
-src/pages/admin/Meals.tsx
-```
-
-Displays meal records from the backend.
-
-Backend data source:
-
-```text
-GET /api/meals
-```
-
-### Manage Students
-
-File:
-
-```text
-src/pages/admin/Students.tsx
-```
-
-Displays student records from the backend.
-
-Backend data source:
-
-```text
-GET /api/students
-```
-
-### Analytics
-
-File:
-
-```text
-src/pages/admin/Analytics.tsx
-```
-
-Displays analytics and reporting information.
-
-## Frontend Backend Connection
-
-The frontend connects to Flask through this file:
+API helper:
 
 ```text
 src/lib/api.ts
 ```
 
-This file defines the API base URL:
+## Frontend Routes
 
-```ts
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
-```
-
-It also defines helper functions:
+### Public
 
 ```text
-login()
-students()
-meals()
-laundryBaskets()
-studentOverview()
-scanMeal()
+/login
+/reset-password
 ```
 
-These functions are imported into frontend pages when backend data is needed.
-
-Example:
-
-```ts
-api.students()
-```
-
-This calls:
+### Student
 
 ```text
-http://localhost:4000/api/students
+/student
+/student/qr
+/student/laundry
+/student/profile
+/student/account
+/student/notifications
+```
+
+### Kitchen
+
+```text
+/kitchen
+/kitchen/scanner
+/kitchen/account
+/kitchen/notifications
+```
+
+### Laundry Staff
+
+```text
+/laundry-staff
+/laundry-staff/baskets
+/laundry-staff/board
+/laundry-staff/reports
+/laundry-staff/issues
+/laundry-staff/scanner
+/laundry-staff/account
+/laundry-staff/notifications
+```
+
+### Admin
+
+```text
+/admin
+/admin/meals
+/admin/students
+/admin/users/:id
+/admin/staff
+/admin/analytics
+/admin/audit
+/admin/approvals
+/admin/tools
+/admin/account
+/admin/notifications
+```
+
+## Shared Frontend Features
+
+### Layout
+
+`src/components/layout/Layout.tsx` provides the protected app layout, role navigation, user area, notifications access, and mobile-friendly page structure.
+
+### Global Search
+
+`src/components/layout/GlobalSearch.tsx` lets users search across useful records from one place.
+
+### Network Status
+
+`src/components/layout/NetworkStatus.tsx` warns the user when the connection is offline or unstable.
+
+### Install Prompt
+
+`src/components/layout/InstallPrompt.tsx` supports installing the web app as a PWA on supported browsers.
+
+### Reusable UI
+
+Shared UI components live in:
+
+```text
+src/components/ui/
+```
+
+They provide consistent buttons, inputs, password fields, select menus, skeleton loading states, toast alerts, empty states, and confirmation dialogs.
+
+## Login And Account System
+
+The login page accepts real email and password input.
+
+Login request:
+
+```http
+POST /api/auth/login
+```
+
+Successful login returns:
+
+```text
+user
+jwt token
+```
+
+The frontend stores the logged-in user and sends the token with API requests.
+
+Account features:
+
+- profile editing
+- phone update
+- hostel and room update
+- password change
+- password show/hide controls
+- theme preference
+- notification preferences
+- profile photo upload
+
+## Student Interface
+
+Student pages allow a student to:
+
+- view meal status
+- view collected and missed meals
+- view scan times
+- show QR identity badge
+- request laundry service
+- view laundry timeline
+- update profile
+- upload photo
+- change password
+- read notifications
+- switch theme
+
+Main student API:
+
+```http
+GET /api/student/<student_id>/overview
+POST /api/student/<student_id>/laundry-request
+```
+
+## Kitchen Interface
+
+Kitchen staff can:
+
+- view meal dashboard
+- select active meal
+- scan QR code with camera
+- manually enter student ID
+- approve or deny meal scan
+- record late or override reason
+- see recent scan activity
+- view student photo during scan confirmation
+
+Main kitchen API:
+
+```http
+GET /api/kitchen/dashboard
+GET /api/meals
+POST /api/meals/<meal_id>/scan
+```
+
+## Laundry Interface
+
+Laundry staff can:
+
+- add baskets
+- edit baskets
+- delete baskets
+- update basket status
+- use a status board
+- scan basket code or student ID
+- report damaged or missing items
+- view reports
+- export basket records
+
+Laundry status flow:
+
+```text
+Requested
+Received
+Washing
+Drying
+Ready
+Picked Up
+Issue Reported
+```
+
+Main laundry API:
+
+```http
+GET /api/laundry/dashboard
+GET /api/laundry/baskets
+POST /api/laundry/baskets
+PATCH /api/laundry/baskets/<basket_id>/status
+POST /api/laundry/scan
+GET /api/laundry/issues
+POST /api/laundry/issues
+GET /api/laundry/reports
+```
+
+## Admin Interface
+
+Admins can:
+
+- manage students
+- manage staff
+- manage meals
+- view analytics
+- view audit logs
+- view approval queue
+- approve or reject requests
+- open user history pages
+- reset user passwords
+- import students from CSV
+- export students, meals, baskets, and audit logs
+- download database backup
+- check database health
+
+Main admin API:
+
+```http
+GET /api/admin/dashboard
+GET /api/admin/control-center
+GET /api/admin/analytics
+GET /api/admin/approvals
+PATCH /api/admin/approvals/<approval_id>
+GET /api/audit-logs
+GET /api/export/<kind>
+GET /api/database/backup
+POST /api/admin/import/students
 ```
 
 ## Backend Overview
 
-The backend is built with:
+Backend technology:
 
 ```text
 Python
 Flask
-SQLite
+Gunicorn
+PyMySQL
+cryptography
 ```
 
 Backend file:
@@ -454,99 +423,41 @@ Backend file:
 server/app.py
 ```
 
-The backend runs on:
+The backend:
+
+- starts the Flask app
+- configures CORS
+- connects to MySQL or SQLite
+- creates missing tables
+- seeds demo data
+- validates login
+- signs JWT tokens
+- protects routes by role
+- reads and writes records
+- logs important actions
+- serves the built frontend in production
+
+## Database
+
+Production database:
 
 ```text
-http://localhost:4000
+MySQL
 ```
 
-## Backend Responsibilities
-
-The backend handles:
-
-- Creating the SQLite database
-- Creating database tables
-- Adding demo data
-- Receiving login requests
-- Returning student data
-- Returning meal data
-- Returning laundry data
-- Recording meal scans
-- Preventing duplicate meal scans
-
-## SQLite Database
-
-Database file:
+Local fallback database:
 
 ```text
 server/data/hams.sqlite
 ```
 
-This file is generated automatically when the backend starts.
-
-## Database Tables
-
-### users
-
-Stores users and role information.
+Important tables:
 
 ```text
-id
-name
-email
-password
-role
-student_id
-hostel
-course
-level
-phone
-status
-```
-
-### meals
-
-Stores meal information.
-
-```text
-id
-type
-start_time
-end_time
-menu
-status
-```
-
-### meal_scans
-
-Stores scanned meal records.
-
-```text
-id
-student_id
-meal_id
-scanned_at
-```
-
-### laundry_baskets
-
-Stores laundry basket records.
-
-```text
-id
-basket_code
-student_id
-status
-received_at
-estimated_finish
-notes
-```
-
-### Other Seeded Tables
-
-The backend also creates and fills these supporting tables:
-
-```text
+users
+meals
+meal_scans
+laundry_baskets
 kitchen_scan_logs
 laundry_activity
 laundry_machines
@@ -554,175 +465,123 @@ laundry_reports
 system_alerts
 analytics_meal_trends
 analytics_kpis
+notifications
+audit_logs
+user_preferences
+password_reset_tokens
+laundry_issues
+approval_requests
 ```
 
-These tables provide data for kitchen activity, laundry activity, machine usage, reports, admin alerts, analytics charts, and KPI cards.
+## Backend API Groups
 
-## Backend API Endpoints
-
-### Health Check
+### Health
 
 ```http
 GET /api/health
+GET /api/database/health
+GET /api/database/summary
+GET /api/database/repair
+POST /api/database/repair
 ```
 
-Checks if the backend is running.
-
-Example response:
-
-```json
-{
-  "ok": true
-}
-```
-
-### Login
+### Authentication
 
 ```http
 POST /api/auth/login
+POST /api/auth/request-password-reset
+POST /api/auth/reset-password
 ```
 
-Logs in a user.
+### Search
 
-Example request:
-
-```json
-{
-  "email": "student@example.com",
-  "password": "password",
-  "role": "student"
-}
+```http
+GET /api/search
 ```
 
-### Get Students
+### Users And Account
+
+```http
+GET /api/users/me/preferences
+PUT /api/users/me/preferences
+PUT /api/users/<user_id>/profile
+PUT /api/users/<user_id>/photo
+POST /api/users/<user_id>/password
+POST /api/users/<user_id>/reset-password
+GET /api/users/<user_id>/history
+GET /api/users/<user_id>/timeline
+```
+
+### Students And Staff
 
 ```http
 GET /api/students
+POST /api/students
+PUT /api/students/<user_id>
+DELETE /api/students/<user_id>
+GET /api/staff
+POST /api/staff
 ```
 
-Returns all student users.
-
-### Get Meals
+### Meals
 
 ```http
 GET /api/meals
-```
-
-Returns all meals.
-
-### Get Laundry Baskets
-
-```http
-GET /api/laundry/baskets
-```
-
-Returns all laundry baskets.
-
-### Get Student Overview
-
-```http
-GET /api/student/<student_id>/overview
-```
-
-Example:
-
-```http
-GET /api/student/240011223/overview
-```
-
-Returns student profile, meals, and laundry data.
-
-### Scan Meal
-
-```http
+POST /api/meals
+PUT /api/meals/<meal_id>
+DELETE /api/meals/<meal_id>
 POST /api/meals/<meal_id>/scan
 ```
 
-Example:
+### Laundry
 
 ```http
-POST /api/meals/2/scan
-```
-
-Example request:
-
-```json
-{
-  "studentId": "240011223"
-}
-```
-
-### Database Summary
-
-```http
-GET /api/database/summary
-```
-
-Use this endpoint to confirm that all database tables have been created and seeded.
-
-### Extra Database Endpoints
-
-```http
-GET /api/kitchen/dashboard
 GET /api/laundry/dashboard
 GET /api/laundry/reports
+GET /api/laundry/baskets
+POST /api/laundry/baskets
+PUT /api/laundry/baskets/<basket_id>
+PATCH /api/laundry/baskets/<basket_id>/status
+DELETE /api/laundry/baskets/<basket_id>
+POST /api/student/<student_id>/laundry-request
+POST /api/laundry/scan
+GET /api/laundry/issues
+POST /api/laundry/issues
+PATCH /api/laundry/issues/<issue_id>
+```
+
+### Notifications
+
+```http
+GET /api/notifications
+PATCH /api/notifications/<notification_id>/read
+PATCH /api/notifications/read-all
+```
+
+### Admin
+
+```http
+GET /api/admin/dashboard
+GET /api/admin/control-center
 GET /api/admin/analytics
 GET /api/admin/alerts
+GET /api/admin/approvals
+PATCH /api/admin/approvals/<approval_id>
+GET /api/audit-logs
+GET /api/export/<kind>
+GET /api/database/backup
+POST /api/admin/import/students
 ```
 
-## How To Run The Full Project
+## Default Accounts
 
-Open the project directory:
-
-```powershell
-cd "C:\Users\HP ELITEBOOK 1040 G7\Documents\myadds-main\myadds-main"
-```
-
-Install frontend dependencies:
-
-```powershell
-npm install
-```
-
-Install backend dependency:
-
-```powershell
-pip install -r requirements.txt
-```
-
-Start backend in terminal 1:
-
-```powershell
-python server\app.py
-```
-
-Start frontend in terminal 2:
-
-```powershell
-npm run dev
-```
-
-Open frontend:
-
-```text
-http://localhost:3000
-```
-
-Open backend health check:
-
-```text
-http://localhost:4000/api/health
-```
-
-## Demo Login Details
-
-Password for all demo users:
+Password:
 
 ```text
 password
 ```
 
-Demo users:
+Emails:
 
 ```text
 student@example.com
@@ -731,56 +590,163 @@ laundry@example.com
 admin@example.com
 ```
 
-## How To Show That Frontend And Backend Are Connected
+## Local Run Instructions
 
-1. Start Flask backend.
-2. Start React frontend.
-3. Open:
+Open the real project folder:
 
-```text
-http://localhost:4000/api/health
+```powershell
+cd "C:\Users\HP ELITEBOOK 1040 G7\Documents\myadds-main\myadds-main"
 ```
 
-If it shows this, backend is running:
+Install dependencies:
 
-```json
-{
-  "ok": true
-}
+```powershell
+npm install
+pip install -r requirements.txt
 ```
 
-4. Open frontend:
+Start Flask:
+
+```powershell
+python server\app.py
+```
+
+Start React:
+
+```powershell
+npm run dev
+```
+
+Open:
 
 ```text
 http://localhost:3000
 ```
 
-5. Login as a student.
-6. The dashboard loads student meal and laundry data from Flask.
-7. Go to kitchen scanner and click Success.
-8. The scan result is sent to Flask and saved in SQLite.
-
-## Complete System Flow
+Backend:
 
 ```text
-User opens React frontend
-        |
-        v
-React page calls src/lib/api.ts
-        |
-        v
-HTTP request goes to Flask backend
-        |
-        v
-Flask reads or writes SQLite database
-        |
-        v
-Flask returns JSON response
-        |
-        v
-React displays updated data in the UI
+http://localhost:4000/api/health
 ```
+
+## Production Run Instructions
+
+Render uses:
+
+```text
+pip install -r requirements.txt
+npm install
+npm run build
+gunicorn server.app:app
+```
+
+Set Render environment variables:
+
+```text
+DATABASE_URL=mysql://avnadmin:YOUR_PASSWORD@PUBLIC_AIVEN_HOST:PORT/defaultdb?ssl-mode=REQUIRED
+SECRET_KEY=use-a-long-random-secret
+CLIENT_ORIGIN=https://your-render-site.onrender.com
+```
+
+## How To Confirm Everything Is Connected
+
+Backend live:
+
+```text
+/api/health
+```
+
+Database live:
+
+```text
+/api/database/health
+```
+
+Tables seeded:
+
+```text
+/api/database/summary
+```
+
+Frontend connected:
+
+1. Open the deployed website.
+2. Login with a demo account.
+3. Open the dashboard.
+4. Create or update a record.
+5. Refresh the page.
+6. The record should still appear because it was saved in MySQL.
+
+## Mobile And PWA Support
+
+The app includes:
+
+- responsive layouts
+- mobile-friendly dashboard sections
+- bottom navigation behavior
+- improved form spacing
+- designed select menus
+- consistent buttons and inputs
+- install prompt
+- manifest file
+- service worker
+- network status message
+
+On phones, use the Render URL:
+
+```text
+https://your-render-site.onrender.com
+```
+
+Do not use:
+
+```text
+http://localhost:3000
+http://localhost:4000
+```
+
+`localhost` on a phone points to the phone itself, not the laptop.
+
+## Troubleshooting
+
+### Request failed on login
+
+Check:
+
+```text
+/api/database/health
+```
+
+If the database is down or the hostname is wrong, login will fail.
+
+### MySQL Name or service not known
+
+Render cannot find the MySQL host.
+
+Fix:
+
+- copy the public Aiven Service URI
+- update Render `DATABASE_URL`
+- redeploy
+
+### Some data is missing after switching to MySQL
+
+SQLite records do not move automatically to MySQL. Run the migration script if the project includes it:
+
+```powershell
+python scripts\migrate_sqlite_to_mysql.py
+```
+
+Then check:
+
+```text
+/api/database/summary
+```
+
+### First load is slow
+
+Render free services can sleep. After waking up, later requests should be faster.
 
 ## Summary
 
-The complete project is a connected full stack system. React handles the user interface, Flask handles backend logic, and SQLite stores the data. The connection between frontend and backend is done through API calls in `src/lib/api.ts`.
+HAMS is now a connected full stack app. React handles the interface, Flask handles backend logic and security, and MySQL stores permanent production data. The system supports real user actions across student, kitchen, laundry, and admin workspaces, and those actions are saved through the backend.

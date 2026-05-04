@@ -1,97 +1,202 @@
 # HAMS Backend Documentation
 
-## Project Overview
+## Overview
 
-This project is a Hostel Attendance Management System frontend connected to a Flask backend. The frontend is built with React and Vite, while the backend is built with Flask and uses SQLite as the database.
+The HAMS backend is a Flask API that powers the React frontend. It handles authentication, role permissions, MySQL or SQLite database access, student records, meal scanning, laundry tracking, notifications, approvals, audit logs, imports, exports, and production static file serving.
 
-The backend provides API endpoints for:
+Production should use MySQL through `DATABASE_URL`. If `DATABASE_URL` is missing, the backend falls back to local SQLite for development.
 
-- User login
-- Student records
-- Meal records
-- Laundry basket records
-- Student dashboard overview
-- Meal scanning
-
-## Project Structure
-
-```text
-myadds-main/
-  server/
-    app.py              # Flask backend and SQLite database setup
-    data/
-      hams.sqlite       # SQLite database, generated automatically
-
-  src/
-    lib/
-      api.ts            # Frontend API helper that connects React to Flask
-
-    pages/
-      Login.tsx
-      admin/
-        Students.tsx
-        Meals.tsx
-      kitchen/
-        Scanner.tsx
-      laundry/
-        Baskets.tsx
-      student/
-        Dashboard.tsx
-        Laundry.tsx
-        Profile.tsx
-
-  requirements.txt      # Python backend dependency list
-  package.json          # Frontend scripts and dependencies
-```
-
-## Backend Technology
-
-The backend is created using:
+## Backend Stack
 
 ```text
 Python
 Flask
-SQLite
+Gunicorn
+PyMySQL
+cryptography
+MySQL in production
+SQLite fallback in local development
 ```
 
-Flask handles the API routes, and SQLite stores the data locally in a database file.
-
-## Main Backend File
-
-The backend code is located in:
+Main backend file:
 
 ```text
 server/app.py
 ```
 
-This file contains:
+Python dependencies:
 
-- Flask app setup
-- CORS headers for frontend connection
-- SQLite connection helper
-- Database table creation
-- Demo seed data
-- API routes
+```text
+requirements.txt
+```
 
-## Database
+## Runtime Modes
 
-The database is SQLite.
+### Development With Separate Frontend
 
-Database location:
+```text
+React dev server: http://localhost:3000
+Flask API:        http://localhost:4000/api
+```
+
+Start backend:
+
+```powershell
+python server\app.py
+```
+
+Start frontend:
+
+```powershell
+npm run dev
+```
+
+### Production
+
+In production, Render runs:
+
+```text
+gunicorn server.app:app
+```
+
+Flask serves:
+
+- React build output from `dist/`
+- API routes under `/api/*`
+- frontend fallback routes such as `/login`, `/student`, `/admin`, and other React routes
+
+## Environment Variables
+
+```text
+DATABASE_URL
+SECRET_KEY
+CLIENT_ORIGIN
+TOKEN_TTL_SECONDS
+MYSQL_POOL_SIZE
+SHOW_RESET_TOKEN
+```
+
+### DATABASE_URL
+
+MySQL connection string for production:
+
+```text
+mysql://avnadmin:YOUR_PASSWORD@PUBLIC_AIVEN_HOST:PORT/defaultdb?ssl-mode=REQUIRED
+```
+
+If missing, the backend uses:
 
 ```text
 server/data/hams.sqlite
 ```
 
-This file is generated automatically when the Flask backend runs for the first time.
+### SECRET_KEY
+
+Used to sign JWT tokens.
+
+Set this in production:
+
+```text
+SECRET_KEY=use-a-long-random-secret
+```
+
+### CLIENT_ORIGIN
+
+Allowed frontend origin for CORS, usually:
+
+```text
+CLIENT_ORIGIN=https://your-render-site.onrender.com
+```
+
+### TOKEN_TTL_SECONDS
+
+How long login tokens last. Default:
+
+```text
+86400
+```
+
+### MYSQL_POOL_SIZE
+
+Maximum pooled MySQL connections. Default:
+
+```text
+5
+```
+
+### SHOW_RESET_TOKEN
+
+Development-only helper. If set to `1`, password reset responses can include the reset token. Do not enable this for real production users.
+
+## Authentication
+
+Login endpoint:
+
+```http
+POST /api/auth/login
+```
+
+Request:
+
+```json
+{
+  "email": "student@example.com",
+  "password": "password"
+}
+```
+
+Response includes:
+
+```json
+{
+  "token": "jwt-token",
+  "user": {
+    "id": 1,
+    "email": "student@example.com",
+    "role": "student"
+  }
+}
+```
+
+Frontend requests send the token with:
+
+```http
+Authorization: Bearer <token>
+```
+
+## Role Protection
+
+The backend checks the logged-in user's role before protected actions.
+
+General rules:
+
+- Admin can manage users, meals, approvals, analytics, tools, exports, audit logs, and database checks.
+- Kitchen staff can access kitchen dashboard and meal scanning.
+- Laundry staff can manage laundry baskets, laundry board, scanner, reports, and issues.
+- Students can access their own profile, meals, laundry status, QR data, notifications, and account settings.
+
+Students should only be able to view and update their own student records.
+
+## Database Support
+
+The backend supports:
+
+```text
+MySQL:     when DATABASE_URL starts with mysql:// or mysql+pymysql://
+SQLite:    when DATABASE_URL is not configured
+```
+
+MySQL is the intended production database.
+
+SQLite is useful for local development because it runs without a database server.
 
 ## Database Tables
 
 ### users
 
-Stores students and staff login details.
+Stores students, kitchen staff, laundry staff, and admins.
 
-Fields include:
+Important fields:
 
 ```text
 id
@@ -101,26 +206,19 @@ password
 role
 student_id
 hostel
+room
 course
 level
 phone
 status
-```
-
-Roles include:
-
-```text
-student
-kitchen
-laundry
-admin
+photo_url
+created_at
+updated_at
 ```
 
 ### meals
 
-Stores meals available for students.
-
-Fields include:
+Stores meal windows and menus.
 
 ```text
 id
@@ -129,26 +227,29 @@ start_time
 end_time
 menu
 status
+created_at
+updated_at
 ```
 
 ### meal_scans
 
-Stores meal scan records.
-
-Fields include:
+Stores successful and denied meal scan records.
 
 ```text
 id
 student_id
 meal_id
 scanned_at
+status
+reason
+staff_id
 ```
+
+A unique index helps prevent duplicate scans for the same student and meal.
 
 ### laundry_baskets
 
-Stores laundry basket records.
-
-Fields include:
+Stores basket tracking records.
 
 ```text
 id
@@ -158,395 +259,223 @@ status
 received_at
 estimated_finish
 notes
+assigned_staff
+created_at
+updated_at
 ```
 
 ### kitchen_scan_logs
 
-Stores kitchen scan history.
-
-Fields include:
-
-```text
-id
-student_id
-meal_type
-scanned_time
-status
-```
+Stores kitchen scan history for dashboards and audit context.
 
 ### laundry_activity
 
-Stores recent laundry staff actions.
-
-Fields include:
-
-```text
-id
-basket_code
-action
-staff_name
-activity_time
-```
+Stores basket timeline events such as received, washing, drying, ready, and picked up.
 
 ### laundry_machines
 
-Stores washer and dryer usage information.
-
-Fields include:
-
-```text
-id
-name
-machine_type
-usage_percent
-status
-```
+Stores washer and dryer status for the laundry dashboard.
 
 ### laundry_reports
 
-Stores laundry reporting summaries.
+Stores reporting summaries for laundry periods.
 
-Fields include:
+### notifications
 
-```text
-id
-report_period
-total_baskets_processed
-average_turnaround
-reported_issues
-```
+Stores notifications for roles and students.
 
-### system_alerts
-
-Stores admin system alerts.
-
-Fields include:
+Important fields:
 
 ```text
 id
-alert_type
+user_role
+student_id
+title
 message
-alert_time
+type
+is_read
+created_at
 ```
 
-### analytics_meal_trends
+### audit_logs
 
-Stores admin meal attendance chart data.
+Stores important system actions.
 
-Fields include:
+Examples:
 
 ```text
-id
-day_label
-attendance_count
+login
+failed_login
+profile_update
+password_change
+meal_scan
+student_create
+student_update
+student_delete
+laundry_issue
+approval_decision
 ```
 
-### analytics_kpis
+### user_preferences
 
-Stores admin KPI data.
-
-Fields include:
+Stores per-user settings:
 
 ```text
-id
-name
-value
-delta
+theme
+dashboard_layout
+table_filters
+last_selected_meal
+notification settings
 ```
 
-## API Base URL
+### password_reset_tokens
 
-The backend runs on:
+Stores password reset tokens and expiry information.
+
+### laundry_issues
+
+Stores damaged, missing, or delayed laundry reports.
+
+### approval_requests
+
+Stores admin approval tasks such as laundry requests, password reset requests, new users, and reported issues.
+
+### Analytics Tables
+
+Supporting analytics tables:
 
 ```text
-http://localhost:4000
+analytics_meal_trends
+analytics_kpis
+system_alerts
 ```
 
-The frontend connects to:
+## Main API Endpoints
 
-```text
-http://localhost:4000/api
-```
-
-This is configured in:
-
-```text
-src/lib/api.ts
-```
-
-## API Endpoints
-
-### Health Check
+### Health
 
 ```http
 GET /api/health
+GET /api/database/health
+GET /api/database/summary
+GET /api/database/repair
+POST /api/database/repair
 ```
 
-Used to check if the backend is running.
+Use these to confirm the backend and database are working.
 
-Example response:
-
-```json
-{
-  "ok": true
-}
-```
-
-### Login
+### Auth
 
 ```http
 POST /api/auth/login
+POST /api/auth/request-password-reset
+POST /api/auth/reset-password
 ```
 
-Request body:
+### Preferences And Account
 
-```json
-{
-  "email": "student@example.com",
-  "password": "password",
-  "role": "student"
-}
+```http
+GET /api/users/me/preferences
+PUT /api/users/me/preferences
+PUT /api/users/<user_id>/profile
+PUT /api/users/<user_id>/photo
+POST /api/users/<user_id>/password
+POST /api/users/<user_id>/reset-password
+GET /api/users/<user_id>/history
+GET /api/users/<user_id>/timeline
 ```
 
-Example response:
-
-```json
-{
-  "user": {
-    "id": 1,
-    "name": "Samuel Tokunbo",
-    "email": "student@example.com",
-    "role": "student",
-    "studentId": "240011223",
-    "hostel": "Blue Nile, Room 402",
-    "course": "Computer Science",
-    "level": "200 Lv",
-    "phone": "+234 8097665431",
-    "status": "Active"
-  }
-}
-```
-
-### Get Students
+### Students And Staff
 
 ```http
 GET /api/students
+POST /api/students
+PUT /api/students/<user_id>
+DELETE /api/students/<user_id>
+GET /api/staff
+POST /api/staff
 ```
 
-Returns all student records.
-
-### Get Meals
+### Meals And Scanning
 
 ```http
 GET /api/meals
-```
-
-Returns meal records.
-
-### Get Laundry Baskets
-
-```http
-GET /api/laundry/baskets
-```
-
-Returns laundry basket records.
-
-### Get Student Overview
-
-```http
-GET /api/student/<student_id>/overview
-```
-
-Example:
-
-```http
-GET /api/student/240011223/overview
-```
-
-Returns:
-
-- Student profile
-- Meal status
-- Laundry status
-
-### Scan Meal
-
-```http
+POST /api/meals
+PUT /api/meals/<meal_id>
+DELETE /api/meals/<meal_id>
 POST /api/meals/<meal_id>/scan
-```
-
-Example:
-
-```http
-POST /api/meals/2/scan
-```
-
-Request body:
-
-```json
-{
-  "studentId": "240011223"
-}
-```
-
-Success response:
-
-```json
-{
-  "message": "Meal approved.",
-  "studentId": "240011223",
-  "meal": {
-    "id": 2,
-    "type": "Lunch"
-  }
-}
-```
-
-If the meal has already been scanned:
-
-```json
-{
-  "message": "Already scanned for Breakfast."
-}
-```
-
-### Database Summary
-
-```http
-GET /api/database/summary
-```
-
-Shows how many records are in each database table.
-
-Example response:
-
-```json
-{
-  "users": 8,
-  "meals": 3,
-  "meal_scans": 1,
-  "laundry_baskets": 4,
-  "kitchen_scan_logs": 6,
-  "laundry_activity": 5,
-  "laundry_machines": 4,
-  "laundry_reports": 3,
-  "system_alerts": 3,
-  "analytics_meal_trends": 7,
-  "analytics_kpis": 3
-}
-```
-
-### Extra Module Endpoints
-
-```http
 GET /api/kitchen/dashboard
+```
+
+Meal scanning supports:
+
+- student ID or QR input
+- active meal validation
+- duplicate prevention
+- inactive student blocking
+- late or override reason
+- scan logging
+
+### Laundry
+
+```http
 GET /api/laundry/dashboard
 GET /api/laundry/reports
+GET /api/laundry/baskets
+POST /api/laundry/baskets
+PUT /api/laundry/baskets/<basket_id>
+PATCH /api/laundry/baskets/<basket_id>/status
+DELETE /api/laundry/baskets/<basket_id>
+POST /api/student/<student_id>/laundry-request
+POST /api/laundry/scan
+GET /api/laundry/issues
+POST /api/laundry/issues
+PATCH /api/laundry/issues/<issue_id>
+```
+
+Laundry tracking supports:
+
+- requested
+- received
+- washing
+- drying
+- ready
+- picked up
+- issue reported
+
+### Notifications
+
+```http
+GET /api/notifications
+PATCH /api/notifications/<notification_id>/read
+PATCH /api/notifications/read-all
+```
+
+### Admin
+
+```http
+GET /api/admin/dashboard
+GET /api/admin/control-center
 GET /api/admin/analytics
 GET /api/admin/alerts
+GET /api/admin/approvals
+PATCH /api/admin/approvals/<approval_id>
+GET /api/audit-logs
+GET /api/search
+GET /api/export/<kind>
+GET /api/database/backup
+POST /api/admin/import/students
 ```
 
-These endpoints return seeded data for kitchen, laundry, reports, analytics, and admin alerts.
+## Default Seed Users
 
-## Frontend Connection
-
-The frontend connects to the backend through:
-
-```text
-src/lib/api.ts
-```
-
-This file contains the API helper functions:
-
-```text
-login()
-students()
-meals()
-laundryBaskets()
-studentOverview()
-scanMeal()
-```
-
-Example:
-
-```ts
-api.students()
-```
-
-This sends a request to:
-
-```text
-http://localhost:4000/api/students
-```
-
-## Connected Frontend Pages
-
-The following frontend pages are connected to the backend:
-
-```text
-Login.tsx
-admin/Students.tsx
-admin/Meals.tsx
-laundry/Baskets.tsx
-student/Dashboard.tsx
-student/Laundry.tsx
-student/Profile.tsx
-kitchen/Scanner.tsx
-```
-
-## How To Run The Project
-
-Open the project folder:
-
-```powershell
-cd "C:\Users\HP ELITEBOOK 1040 G7\Documents\myadds-main\myadds-main"
-```
-
-Install frontend dependencies:
-
-```powershell
-npm install
-```
-
-Install backend dependency:
-
-```powershell
-pip install -r requirements.txt
-```
-
-Start the backend:
-
-```powershell
-python server\app.py
-```
-
-Start the frontend in another terminal:
-
-```powershell
-npm run dev
-```
-
-Open the frontend:
-
-```text
-http://localhost:3000
-```
-
-Open the backend health check:
-
-```text
-http://localhost:4000/api/health
-```
-
-## Demo Login Details
-
-All demo users use this password:
+Default password:
 
 ```text
 password
 ```
 
-Demo emails:
+Default accounts:
 
 ```text
 student@example.com
@@ -555,6 +484,78 @@ laundry@example.com
 admin@example.com
 ```
 
-## Summary
+The backend seeds starter data for users, meals, laundry, notifications, analytics, reports, and audit logs if the tables are empty.
 
-The backend is a Flask API connected to a SQLite database. The React frontend uses `src/lib/api.ts` to communicate with Flask. When both servers are running, the frontend can log in users, load student records, load meals, load laundry records, display student profile data, and scan meals through the backend.
+## Frontend Connection
+
+Frontend API file:
+
+```text
+src/lib/api.ts
+```
+
+In development, it calls:
+
+```text
+http://localhost:4000/api
+```
+
+In production, the frontend and backend share the same Render domain.
+
+## Testing Backend Health
+
+Local:
+
+```text
+http://localhost:4000/api/health
+http://localhost:4000/api/database/health
+http://localhost:4000/api/database/summary
+```
+
+Production:
+
+```text
+https://your-render-site.onrender.com/api/health
+https://your-render-site.onrender.com/api/database/health
+https://your-render-site.onrender.com/api/database/summary
+```
+
+## Troubleshooting
+
+### Request failed on login
+
+Check:
+
+```text
+/api/database/health
+```
+
+If the database is not reachable, login cannot complete.
+
+### Name or service not known
+
+Render cannot resolve the MySQL hostname.
+
+Fix:
+
+- Copy the public Aiven Service URI.
+- Replace Render `DATABASE_URL`.
+- Confirm the Aiven MySQL service is running.
+- Redeploy Render.
+
+### cryptography package is required
+
+The backend needs `cryptography` for Aiven MySQL authentication. Confirm `requirements.txt` includes it and redeploy.
+
+### Slow first load
+
+Render free services can sleep. The first request after sleep can be slow, then later requests should be faster.
+
+## Security Notes
+
+- Keep `SECRET_KEY` private.
+- Keep `DATABASE_URL` private.
+- Do not commit real database passwords to GitHub.
+- Use MySQL for production data.
+- Use role checks for every protected API route.
+- Use audit logs for admin changes, scans, password events, imports, exports, and deletes.
