@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Bell, CheckCircle2, ImagePlus, KeyRound, Moon, Phone, Settings, Sun, UserRound } from "lucide-react";
+import { Bell, CheckCircle2, ImagePlus, KeyRound, Phone, Settings, UserRound } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { PasswordInput } from "@/src/components/ui/password-input";
@@ -238,35 +238,6 @@ export default function Account() {
             <h2 className="text-lg font-semibold text-neutral-900">Saved Preferences</h2>
             <p className="text-sm text-neutral-500">These settings are saved to your user account.</p>
           </div>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {[
-            { value: "system", label: "System", icon: Settings },
-            { value: "light", label: "Light", icon: Sun },
-            { value: "dark", label: "Dark", icon: Moon },
-          ].map((themeOption) => {
-            const Icon = themeOption.icon;
-            const active = preferences.theme === themeOption.value;
-            return (
-              <button
-                key={themeOption.value}
-                type="button"
-                onClick={() => {
-                  const theme = themeOption.value as UserPreferences["theme"];
-                  setPreferences({ ...preferences, theme });
-                  applyTheme(theme);
-                }}
-                className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition-all ${
-                  active
-                    ? "border-indigo-300 bg-indigo-50 text-indigo-800 shadow-md shadow-indigo-100"
-                    : "border-neutral-200 bg-neutral-50 text-neutral-700 hover:border-indigo-200 hover:bg-indigo-50"
-                }`}
-              >
-                <Icon className="h-5 w-5" />
-                <span className="font-bold">{themeOption.label}</span>
-              </button>
-            );
-          })}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <SelectMenu value={preferences.theme} onChange={(value) => {

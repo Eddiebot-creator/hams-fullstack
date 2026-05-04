@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Shirt, CheckCircle2, AlertCircle } from "lucide-react";
+import { Shirt, CheckCircle2, AlertCircle, QrCode, ScanLine } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
+import { Input } from "@/src/components/ui/input";
 import { api, type LaundryBasket, type StudentOverview } from "@/src/lib/api";
 import { showToast } from "@/src/components/ui/toast";
 
@@ -10,6 +11,8 @@ const timelineSteps = ["Pending Approval", "Pending", "Washing", "Ready", "Picke
 export default function Laundry() {
   const [records, setRecords] = useState<LaundryBasket[]>([]);
   const [overview, setOverview] = useState<StudentOverview | null>(null);
+  const [dropCount, setDropCount] = useState("1");
+  const [isRequestingDrop, setIsRequestingDrop] = useState(false);
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("hamsUser") || "{}");
@@ -21,9 +24,14 @@ export default function Laundry() {
   }, []);
 
   const current = records[0];
+  const activeDropTicket = records.find((item) => item.status !== "Picked Up") ?? null;
   const pastRecords = records.slice(1);
   const currentStepIndex = current ? Math.max(0, timelineSteps.indexOf(current.status)) : -1;
   const isSubscribed = overview?.student.laundrySubscribed !== false;
+  const studentId = overview?.student.studentId;
+  const dropQrPayload = activeDropTicket && studentId
+    ? `HAMS-LAUNDRY:${activeDropTicket.basketCode}:${studentId}:${activeDropTicket.clothesCount || 1}:${Date.now()}`
+    : "";
 
   const subscribeLaundry = async () => {
     if (!overview?.student) return;
@@ -34,6 +42,27 @@ export default function Laundry() {
       showToast("Laundry subscription activated.");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Unable to update laundry subscription.", "error");
+    }
+  };
+
+  const requestDropQr = async () => {
+    if (!studentId) return;
+    const clothesCount = Math.max(1, Number(dropCount) || 1);
+    setIsRequestingDrop(true);
+    try {
+      const basketCode = `LAU${Date.now().toString().slice(-6)}`;
+      const basket = await api.requestLaundry(studentId, {
+        basketCode,
+        clothesCount,
+        receivedAt: "Requested now",
+        notes: `Student submitted drop-off QR for ${clothesCount} clothes.`,
+      });
+      setRecords((currentRecords) => [basket, ...currentRecords]);
+      showToast("Drop-off QR created. Show it to laundry staff for scanning.");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Unable to create drop-off QR.", "error");
+    } finally {
+      setIsRequestingDrop(false);
     }
   };
 
@@ -61,6 +90,43 @@ export default function Laundry() {
           )}
         </div>
       </section>
+
+      {isSubscribed && (
+        <section className="rounded-3xl border border-indigo-100 bg-indigo-50 p-5 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Student drop-off QR</p>
+              <h2 className="mt-1 text-xl font-black text-neutral-950">Generate laundry drop ticket</h2>
+              <p className="mt-1 text-sm font-medium text-neutral-600">Enter number of clothes, generate QR, and let laundry staff scan it to confirm your identity.</p>
+            </div>
+            <div className="w-full sm:w-64">
+              <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-indigo-700">Clothes count</label>
+              <Input type="number" min={1} value={dropCount} onChange={(event) => setDropCount(event.target.value)} />
+            </div>
+          </div>
+          <Button className="mt-4 bg-indigo-600 text-white hover:bg-indigo-700" onClick={requestDropQr} disabled={isRequestingDrop}>
+            <ScanLine className="h-4 w-4" />
+            {isRequestingDrop ? "Creating ticket..." : "Create Drop-off QR"}
+          </Button>
+
+          {activeDropTicket && dropQrPayload && (
+            <div className="mt-5 rounded-2xl border border-indigo-200 bg-white p-4">
+              <div className="flex items-center gap-2">
+                <QrCode className="h-5 w-5 text-indigo-700" />
+                <p className="text-sm font-black text-indigo-800">Drop ticket #{activeDropTicket.basketCode}</p>
+              </div>
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=230x230&data=${encodeURIComponent(dropQrPayload)}`}
+                alt="Laundry drop-off QR"
+                className="mx-auto mt-3 h-56 w-56 rounded-2xl border border-indigo-100"
+              />
+              <p className="mt-3 text-center text-sm font-semibold text-neutral-700">
+                Clothes: {activeDropTicket.clothesCount || 1} • Status: {activeDropTicket.status}
+              </p>
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden">
         <div className="p-6 border-b border-neutral-100">
@@ -117,7 +183,7 @@ export default function Laundry() {
                   </div>
                   <div>
                     <p className="font-medium text-neutral-900">Basket #{record.basketCode}</p>
-                    <p className="text-sm text-neutral-500">{record.receivedAt}</p>
+                    <p className="text-sm text-neutral-500">{record.receivedAt} • {record.clothesCount || 1} clothes</p>
                   </div>
                 </div>
                 <span className={`text-sm font-medium px-3 py-1 rounded-full ${bg} ${color}`}>

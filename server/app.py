@@ -108,6 +108,9 @@ def parse_student_id_from_scan(value):
     if raw.startswith("HAMS-MEAL:"):
         parts = raw.split(":")
         return parts[2].strip() if len(parts) >= 3 else ""
+    if raw.startswith("HAMS-LAUNDRY:"):
+        parts = raw.split(":")
+        return parts[2].strip() if len(parts) >= 3 else ""
     if raw.startswith("HAMS-STUDENT:"):
         return raw.replace("HAMS-STUDENT:", "", 1).strip()
     return raw
@@ -188,7 +191,33 @@ def send_password_reset_email(recipient, name, reset_link):
     sender = os.environ.get("MAIL_FROM", "onboarding@resend.dev")
 
     if not resend_api_key:
-        return False, "Email sending is not configured."
+        smtp_host = os.environ.get("SMTP_HOST", "").strip()
+        smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+        smtp_user = os.environ.get("SMTP_USER", "").strip()
+        smtp_password = os.environ.get("SMTP_PASSWORD", "")
+        smtp_sender = os.environ.get("SMTP_FROM", sender)
+        if not smtp_host or not smtp_user or not smtp_password:
+            return False, "Email sending is not configured. Set RESEND_API_KEY or SMTP settings."
+        try:
+            msg = EmailMessage()
+            msg["Subject"] = "Reset your HAMS password"
+            msg["From"] = smtp_sender
+            msg["To"] = recipient
+            msg.set_content("\n".join([
+                f"Hello {name},",
+                "",
+                "Use this link to reset your HAMS password:",
+                reset_link,
+                "",
+                "This link expires in 1 hour. If you did not request it, you can ignore this email.",
+            ]))
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
+                smtp.starttls()
+                smtp.login(smtp_user, smtp_password)
+                smtp.send_message(msg)
+            return True, "Reset link sent to your email."
+        except Exception as exc:
+            return False, f"Unable to send reset email: {exc}"
 
     payload = json.dumps({
         "from": sender,
@@ -423,6 +452,7 @@ def init_db():
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               basket_code VARCHAR(255) NOT NULL UNIQUE,
               student_id VARCHAR(255) NOT NULL,
+              clothes_count INTEGER NOT NULL DEFAULT 1,
               status VARCHAR(50) NOT NULL,
               received_at VARCHAR(255) NOT NULL,
               estimated_finish VARCHAR(255),
@@ -565,6 +595,9 @@ def init_db():
         scan_columns = table_columns(conn, "meal_scans")
         if "scan_date" not in scan_columns:
             conn.execute("ALTER TABLE meal_scans ADD COLUMN scan_date VARCHAR(32)")
+        basket_columns = table_columns(conn, "laundry_baskets")
+        if "clothes_count" not in basket_columns:
+            conn.execute("ALTER TABLE laundry_baskets ADD COLUMN clothes_count INTEGER NOT NULL DEFAULT 1")
 
         seed_db(conn)
         seed_supporting_tables(conn)
@@ -1056,7 +1089,7 @@ def create_app():
             baskets = query_all(
                 """
                 SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                       received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                       clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
                 FROM laundry_baskets
                 WHERE student_id = ? AND (basket_code LIKE ? OR status LIKE ?)
                 ORDER BY id DESC
@@ -1100,7 +1133,7 @@ def create_app():
         baskets = [] if role == "kitchen" else query_all(
             """
             SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                   clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
             FROM laundry_baskets
             WHERE basket_code LIKE ? OR student_id LIKE ? OR status LIKE ?
             ORDER BY id DESC
@@ -1812,7 +1845,7 @@ def create_app():
             rows = query_all(
                 f"""
                 SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                       received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                       clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
                 FROM laundry_baskets
                 WHERE {where}
                 ORDER BY id DESC
@@ -1828,7 +1861,7 @@ def create_app():
             lambda: query_all(
                 """
                 SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                       received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                       clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
                 FROM laundry_baskets
                 ORDER BY id DESC
                 """
@@ -1873,7 +1906,7 @@ def create_app():
         updated = query_one(
             """
             SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                   clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
             FROM laundry_baskets
             WHERE id = ?
             """,
@@ -1894,12 +1927,13 @@ def create_app():
             with get_connection() as conn:
                 cursor = conn.execute(
                     """
-                    INSERT INTO laundry_baskets (basket_code, student_id, status, received_at, estimated_finish, notes)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO laundry_baskets (basket_code, student_id, clothes_count, status, received_at, estimated_finish, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         payload["basketCode"],
                         payload["studentId"],
+                        max(int(payload.get("clothesCount", 1) or 1), 1),
                         payload["status"],
                         payload["receivedAt"],
                         payload.get("estimatedFinish"),
@@ -1934,7 +1968,7 @@ def create_app():
         basket = query_one(
             """
             SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                   clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
             FROM laundry_baskets
             WHERE id = ?
             """,
@@ -1956,12 +1990,13 @@ def create_app():
                 result = conn.execute(
                     """
                     UPDATE laundry_baskets
-                    SET basket_code = ?, student_id = ?, status = ?, received_at = ?, estimated_finish = ?, notes = ?
+                    SET basket_code = ?, student_id = ?, clothes_count = ?, status = ?, received_at = ?, estimated_finish = ?, notes = ?
                     WHERE id = ?
                     """,
                     (
                         payload["basketCode"],
                         payload["studentId"],
+                        max(int(payload.get("clothesCount", 1) or 1), 1),
                         payload["status"],
                         payload["receivedAt"],
                         payload.get("estimatedFinish"),
@@ -1999,7 +2034,7 @@ def create_app():
         basket = query_one(
             """
             SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                   clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
             FROM laundry_baskets
             WHERE id = ?
             """,
@@ -2024,6 +2059,7 @@ def create_app():
         payload = request.get_json(silent=True) or {}
         basket_code = payload.get("basketCode") or f"REQ{student_id[-4:]}"
         received_at = payload.get("receivedAt") or utc_now_text()
+        clothes_count = max(int(payload.get("clothesCount", 1) or 1), 1)
         student = query_one("SELECT name, laundry_subscribed AS laundrySubscribed FROM users WHERE role = 'student' AND student_id = ?", (student_id,))
         if student is None:
             return jsonify({"message": "Student not found."}), 404
@@ -2034,10 +2070,10 @@ def create_app():
             with get_connection() as conn:
                 cursor = conn.execute(
                     """
-                    INSERT INTO laundry_baskets (basket_code, student_id, status, received_at, estimated_finish, notes)
-                    VALUES (?, ?, 'Pending Approval', ?, ?, ?)
+                    INSERT INTO laundry_baskets (basket_code, student_id, clothes_count, status, received_at, estimated_finish, notes)
+                    VALUES (?, ?, ?, 'Pending Approval', ?, ?, ?)
                     """,
-                    (basket_code, student_id, received_at, payload.get("estimatedFinish"), payload.get("notes", "Student laundry request")),
+                    (basket_code, student_id, clothes_count, received_at, payload.get("estimatedFinish"), payload.get("notes", "Student laundry request")),
                 )
                 conn.execute(
                     "INSERT INTO laundry_activity (basket_code, action, staff_name, activity_time) VALUES (?, 'Pending Approval', ?, ?)",
@@ -2057,7 +2093,7 @@ def create_app():
         basket = query_one(
             """
             SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                   clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
             FROM laundry_baskets WHERE id = ?
             """,
             (basket_id,),
@@ -2069,8 +2105,10 @@ def create_app():
         payload = request.get_json(silent=True) or {}
         action = payload.get("action")
         basket_code = (payload.get("basketCode") or "").strip()
-        student_id = (payload.get("studentId") or "").strip()
+        scanned_value = payload.get("qrPayload") or payload.get("studentId") or ""
+        student_id = parse_student_id_from_scan(scanned_value)
         staff_name = payload.get("staffName") or "Laundry Staff"
+        clothes_count = max(int(payload.get("clothesCount", 1) or 1), 1)
 
         if action not in ["receive", "return"]:
             return jsonify({"message": "Scan action must be receive or return."}), 400
@@ -2096,7 +2134,7 @@ def create_app():
             existing = conn.execute(
                 """
                 SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                       received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                       clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
                 FROM laundry_baskets
                 WHERE basket_code = ?
                 """,
@@ -2118,16 +2156,16 @@ def create_app():
                 if existing is None:
                     cursor = conn.execute(
                         """
-                        INSERT INTO laundry_baskets (basket_code, student_id, status, received_at, estimated_finish, notes)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        INSERT INTO laundry_baskets (basket_code, student_id, clothes_count, status, received_at, estimated_finish, notes)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                         """,
-                        (basket_code, student_id, status, utc_now_text(), payload.get("estimatedFinish"), payload.get("notes", "Scanned at laundry desk")),
+                        (basket_code, student_id, clothes_count, status, utc_now_text(), payload.get("estimatedFinish"), payload.get("notes", "Scanned at laundry desk")),
                     )
                     basket_id = cursor.lastrowid
                 else:
                     if existing["studentId"] != student_id:
                         return jsonify({"message": "Basket code is already assigned to another student."}), 409
-                    conn.execute("UPDATE laundry_baskets SET status = ? WHERE id = ?", (status, existing["id"]))
+                    conn.execute("UPDATE laundry_baskets SET status = ?, clothes_count = ? WHERE id = ?", (status, clothes_count, existing["id"]))
                     basket_id = existing["id"]
 
             conn.execute(
@@ -2141,7 +2179,7 @@ def create_app():
         basket = query_one(
             """
             SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                   clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
             FROM laundry_baskets
             WHERE id = ?
             """,
@@ -2563,7 +2601,7 @@ def create_app():
             pending_baskets = query_all(
                 """
                 SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                       received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                       clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
                 FROM laundry_baskets
                 WHERE status = 'Pending Approval'
                 ORDER BY id DESC
@@ -2824,7 +2862,7 @@ def create_app():
             laundry = query_all(
                 """
                 SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                       received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                       clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
                 FROM laundry_baskets
                 WHERE student_id = ?
                 ORDER BY id DESC
@@ -2871,7 +2909,7 @@ def create_app():
         laundry = query_all(
             """
             SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                   received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+                   clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
             FROM laundry_baskets
             WHERE student_id = ?
             ORDER BY id DESC

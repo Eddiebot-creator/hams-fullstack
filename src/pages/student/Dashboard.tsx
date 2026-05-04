@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [requestNote, setRequestNote] = useState("");
+  const [requestClothesCount, setRequestClothesCount] = useState("1");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export default function Dashboard() {
     try {
       const basket = await api.requestLaundry(studentId, {
         basketCode: `REQ${Date.now().toString().slice(-5)}`,
+        clothesCount: Math.max(1, Number(requestClothesCount) || 1),
         receivedAt: "Requested now",
         notes: requestNote || "Student laundry request",
       });
@@ -202,6 +204,7 @@ export default function Dashboard() {
               <PackagePlus className="h-4 w-4 text-indigo-600" />
               Request laundry drop-off
             </h3>
+            <Input type="number" min={1} placeholder="How many clothes?" value={requestClothesCount} onChange={(event) => setRequestClothesCount(event.target.value)} />
             <Input placeholder="Optional note for laundry staff" value={requestNote} onChange={(event) => setRequestNote(event.target.value)} />
             <Button onClick={requestLaundry} disabled={!laundrySubscribed} className="w-full">
               {laundrySubscribed ? "Send Request" : "Subscribe to Laundry First"}

@@ -154,6 +154,7 @@ export type LaundryBasket = {
   id: number;
   basketCode: string;
   studentId: string;
+  clothesCount?: number;
   status: string;
   receivedAt: string;
   estimatedFinish: string | null;
@@ -184,6 +185,7 @@ export type CreateStudentPayload = {
 export type CreateLaundryBasketPayload = {
   basketCode: string;
   studentId: string;
+  clothesCount?: number;
   status: string;
   receivedAt: string;
   estimatedFinish?: string;
@@ -497,7 +499,7 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
-  scanLaundry: (payload: { action: "receive" | "return"; basketCode: string; studentId: string; staffName?: string }) =>
+  scanLaundry: (payload: { action: "receive" | "return"; basketCode: string; studentId: string; clothesCount?: number; qrPayload?: string; staffName?: string }) =>
     request<{ message: string; basket: LaundryBasket; student: Student }>("/laundry/scan", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -523,7 +525,7 @@ export const api = {
   kitchenDashboard: () => request<KitchenDashboard>("/kitchen/dashboard", { cacheMs: 8000 }),
   laundryDashboard: () => request<LaundryDashboard>("/laundry/dashboard", { cacheMs: 8000 }),
   laundryReports: () => request<LaundryReports>("/laundry/reports", { cacheMs: 20000 }),
-  requestLaundry: (studentId: string, payload: { basketCode?: string; receivedAt?: string; estimatedFinish?: string; notes?: string }) =>
+  requestLaundry: (studentId: string, payload: { basketCode?: string; clothesCount?: number; receivedAt?: string; estimatedFinish?: string; notes?: string }) =>
     request<LaundryBasket>(`/student/${studentId}/laundry-request`, {
       method: "POST",
       body: JSON.stringify(payload),
