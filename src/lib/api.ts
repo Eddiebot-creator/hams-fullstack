@@ -121,6 +121,54 @@ async function request<T>(path: string, options?: ApiRequestOptions): Promise<T>
 
 export type Role = "student" | "kitchen" | "laundry" | "admin";
 
+export type HealthcareProvider = {
+  id: number;
+  doctor: string;
+  specialty: string;
+  hospital: string;
+  location: string;
+  distance: string;
+  rating: number;
+  reviewCount: number;
+  nextSlot: string;
+  fee: string;
+  waitTime: string;
+  experience: string;
+  consultModes: string[];
+  tags: string[];
+  problems: string[];
+  image: string;
+  bio: string;
+  languages: string[];
+  insurance: string[];
+};
+
+export type HealthcareAppointment = {
+  id: number;
+  providerId: number;
+  doctor: string;
+  specialty: string;
+  hospital: string;
+  patientName: string;
+  patientPhone: string;
+  reason: string;
+  date: string;
+  time: string;
+  mode: string;
+  status: "Pending" | "Confirmed" | "Completed";
+  createdAt: string;
+};
+
+export type CreateHealthcareAppointmentPayload = {
+  providerId: number;
+  patientName: string;
+  patientPhone: string;
+  reason: string;
+  date: string;
+  time: string;
+  mode: string;
+};
+
 export type Student = {
   id: number;
   name: string;
@@ -406,6 +454,13 @@ export const api = {
     }),
   resetPasswordWithToken: (payload: { token: string; newPassword: string }) =>
     request<{ message: string }>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  healthcareProviders: () => request<HealthcareProvider[]>("/healthcare/providers", { cacheMs: 15000 }),
+  healthcareAppointments: () => request<HealthcareAppointment[]>("/healthcare/appointments", { cacheMs: 5000 }),
+  createHealthcareAppointment: (payload: CreateHealthcareAppointmentPayload) =>
+    request<HealthcareAppointment>("/healthcare/appointments", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

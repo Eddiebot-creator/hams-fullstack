@@ -16,6 +16,8 @@ export default function LaundryScanner() {
   const [basket, setBasket] = useState<LaundryBasket | null>(null);
   const [student, setStudent] = useState<Student | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [clothesCount, setClothesCount] = useState("1");
+  const [lastQrPayload, setLastQrPayload] = useState("");
 
   const saveScan = async () => {
     if (!basketCode.trim() || !studentId.trim()) {
@@ -34,6 +36,8 @@ export default function LaundryScanner() {
         action: actionType,
         basketCode: basketCode.trim(),
         studentId: studentId.trim(),
+        clothesCount: Math.max(1, Number(clothesCount) || 1),
+        qrPayload: lastQrPayload || undefined,
         staffName: storedUser.name || "Laundry Staff",
       });
       setBasket(result.basket);
@@ -51,9 +55,21 @@ export default function LaundryScanner() {
     }
   };
 
-  const handleQrDetected = (id: string) => {
-    setStudentId(id);
-    setMessage(`Student ID ${id} detected. Enter basket code and save.`);
+  const handleQrDetected = (id: string, rawValue: string) => {
+    setLastQrPayload(rawValue);
+    if (rawValue.startsWith("HAMS-LAUNDRY:")) {
+      const parts = rawValue.split(":");
+      const scannedBasket = parts[1] || "";
+      const scannedStudent = parts[2] || id;
+      const scannedCount = parts[3] || "1";
+      if (scannedBasket) setBasketCode(scannedBasket);
+      setStudentId(scannedStudent);
+      setClothesCount(String(Math.max(1, Number(scannedCount) || 1)));
+      setMessage(`Laundry QR detected for ${scannedStudent}. Save scan to confirm.`);
+    } else {
+      setStudentId(id);
+      setMessage(`Student ID ${id} detected. Enter basket code and save.`);
+    }
     setScanStatus("idle");
   };
 
@@ -98,6 +114,10 @@ export default function LaundryScanner() {
             <span className="text-sm font-semibold text-neutral-700 flex items-center gap-2"><IdCard className="w-4 h-4" /> Student ID</span>
             <Input value={studentId} onChange={(event) => setStudentId(event.target.value)} placeholder="Example: 240011223" />
           </label>
+          <label className="space-y-1">
+            <span className="text-sm font-semibold text-neutral-700 flex items-center gap-2"><Shirt className="w-4 h-4" /> Clothes count</span>
+            <Input type="number" min={1} value={clothesCount} onChange={(event) => setClothesCount(event.target.value)} placeholder="Example: 7" />
+          </label>
         </div>
         
         <div className="mb-6">
@@ -128,7 +148,7 @@ export default function LaundryScanner() {
             <p className="font-bold text-green-800 text-lg">Verification Approved</p>
             <p className="text-sm text-green-700">{message}</p>
             {student && <p className="text-sm text-green-600 mt-1">{student.name} - {student.studentId}</p>}
-            {basket && <p className="text-xs text-green-600 mt-1">Status saved as {basket.status}</p>}
+            {basket && <p className="text-xs text-green-600 mt-1">Status saved as {basket.status} • {basket.clothesCount || 1} clothes</p>}
           </motion.div>
         )}
 

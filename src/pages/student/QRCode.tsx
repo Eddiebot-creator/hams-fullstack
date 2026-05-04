@@ -48,6 +48,8 @@ export default function QRCode() {
   const qrMealType = activeMeal?.type ?? "Inactive";
   const qrPayload = isSubscribed ? `HAMS-MEAL:${qrMealType}:${studentId}:${today}:${nonce}` : "";
   const qrData = encodeURIComponent(qrPayload);
+  const profilePhoto = overview?.student?.photoUrl || storedUser?.photoUrl;
+  const studentName = overview?.student?.name || storedUser?.name || "Student";
 
   useEffect(() => {
     api.studentOverview(studentId).then(setOverview).catch(console.error);
@@ -131,21 +133,8 @@ export default function QRCode() {
       >
         <div className="absolute top-0 left-0 w-full h-2 bg-indigo-600" />
 
-        <div className="mx-auto mb-4 flex items-center justify-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700">
-            <QrIcon className="h-7 w-7" />
-          </div>
-          {(overview?.student?.photoUrl || storedUser?.photoUrl) ? (
-            <img
-              src={overview?.student?.photoUrl || storedUser?.photoUrl}
-              alt="Profile"
-              className="h-14 w-14 rounded-2xl object-cover border-2 border-indigo-100 shadow-sm"
-            />
-          ) : (
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white text-xl font-black shadow-sm">
-              {(overview?.student?.name || storedUser?.name || "S").charAt(0).toUpperCase()}
-            </div>
-          )}
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700">
+          <QrIcon className="h-7 w-7" />
         </div>
         <h1 className="text-2xl font-bold text-neutral-900">Meal QR Ticket</h1>
         <p className="mt-2 text-sm text-neutral-500">QR codes are generated only during breakfast and dinner service windows.</p>
@@ -182,21 +171,54 @@ export default function QRCode() {
                 <p className="mt-3 text-sm font-semibold text-green-800">This meal ticket has been consumed and cannot be reused.</p>
               </motion.div>
             ) : (
-              <div className="mx-auto mt-8 inline-block rounded-3xl border-2 border-indigo-100 bg-white p-4 shadow-sm relative">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${qrData}`}
-                  alt={`${qrMealType} QR Code`}
-                  className="h-64 w-64 rounded-2xl"
-                />
-                {activeUnclaimedMeal ? (
-                  <motion.div
-                    animate={{ y: [0, 250, 0] }}
-                    transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                    className="absolute left-4 right-4 top-4 z-10 h-1 bg-green-500/70 shadow-[0_0_10px_rgba(34,197,94,0.9)]"
+              <div className="mx-auto mt-8 grid max-w-2xl items-center gap-4 sm:grid-cols-[auto_1fr]">
+                <div className="inline-block rounded-3xl border-2 border-indigo-100 bg-white p-4 shadow-sm relative">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${qrData}`}
+                    alt={`${qrMealType} QR Code`}
+                    className="h-64 w-64 rounded-2xl"
                   />
-                ) : null}
+                  {activeUnclaimedMeal ? (
+                    <motion.div
+                      animate={{ y: [0, 250, 0] }}
+                      transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                      className="absolute left-4 right-4 top-4 z-10 h-1 bg-green-500/70 shadow-[0_0_10px_rgba(34,197,94,0.9)]"
+                    />
+                  ) : null}
+                </div>
+
+                <div className="rounded-3xl border border-neutral-100 bg-neutral-50 p-5 text-left">
+                  <div className="flex items-center gap-4">
+                    {profilePhoto ? (
+                      <img
+                        src={profilePhoto}
+                        alt="Profile"
+                        className="h-20 w-20 rounded-2xl border-2 border-white object-cover shadow-sm"
+                      />
+                    ) : (
+                      <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-indigo-600 text-2xl font-black text-white shadow-sm">
+                        {studentName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">Student identity</p>
+                      <p className="mt-1 text-lg font-black text-neutral-950">{studentName}</p>
+                      <p className="font-mono text-sm font-bold text-indigo-700">{studentId}</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-2xl bg-white p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">Ticket meal</p>
+                    <p className="mt-1 text-base font-black text-neutral-950">{qrMealType}</p>
+                    <p className="text-sm font-semibold text-neutral-500">
+                      {activeMeal
+                        ? (activeMeal.windowLabel || mealWindows.find((item) => item.type === activeMeal.type)?.label)
+                        : nextWindowLabel()}
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
+
             <div className="mt-4 flex justify-center">
               <span
                 className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
@@ -252,9 +274,7 @@ export default function QRCode() {
         ) : (
           <div className="mt-8 rounded-3xl border border-dashed border-neutral-200 bg-neutral-50 p-8">
             <TicketCheck className="mx-auto h-12 w-12 text-neutral-400" />
-            <p className="mt-4 text-lg font-black text-neutral-950">
-              Meal QR is paused
-            </p>
+            <p className="mt-4 text-lg font-black text-neutral-950">Meal QR is paused</p>
             <p className="mt-2 text-sm font-medium text-neutral-500">
               Subscribe to meals to generate your breakfast and dinner QR ticket.
             </p>
