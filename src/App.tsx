@@ -12,6 +12,7 @@ import { CardSkeleton } from "./components/ui/skeleton";
 
 const pageImports = {
   Login: () => import("./pages/Login"),
+  HealthConnect: () => import("./pages/HealthcareApp"),
   ResetPassword: () => import("./pages/ResetPassword"),
   Account: () => import("./pages/Account"),
   Notifications: () => import("./pages/Notifications"),
@@ -39,6 +40,7 @@ const pageImports = {
 };
 
 const Login = lazy(pageImports.Login);
+const HealthConnect = lazy(pageImports.HealthConnect);
 const ResetPassword = lazy(pageImports.ResetPassword);
 const Account = lazy(pageImports.Account);
 const Notifications = lazy(pageImports.Notifications);
@@ -131,6 +133,8 @@ export default function App() {
       <NetworkStatus />
       <SessionExpiredRedirect />
       <Routes>
+        <Route path="/" element={<Navigate to="/healthcare" replace />} />
+        <Route path="/healthcare/*" element={<Page><HealthConnect /></Page>} />
         <Route path="/login" element={<Page><Login /></Page>} />
         <Route path="/reset-password" element={<Page><ResetPassword /></Page>} />
         
@@ -179,7 +183,7 @@ export default function App() {
           <Route path="notifications" element={<Page><Notifications /></Page>} />
         </Route>
 
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/healthcare" replace />} />
       </Routes>
     </Router>
   );

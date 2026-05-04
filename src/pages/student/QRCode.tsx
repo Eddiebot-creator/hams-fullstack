@@ -66,8 +66,21 @@ export default function QRCode() {
       >
         <div className="absolute top-0 left-0 w-full h-2 bg-indigo-600" />
 
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700">
-          <QrIcon className="h-7 w-7" />
+        <div className="mx-auto mb-4 flex items-center justify-center gap-3">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700">
+            <QrIcon className="h-7 w-7" />
+          </div>
+          {(overview?.student?.profilePhoto || storedUser?.profilePhoto) ? (
+            <img
+              src={overview?.student?.profilePhoto || storedUser?.profilePhoto}
+              alt="Profile"
+              className="h-14 w-14 rounded-2xl object-cover border-2 border-indigo-100 shadow-sm"
+            />
+          ) : (
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white text-xl font-black shadow-sm">
+              {(overview?.student?.name || storedUser?.name || "S").charAt(0).toUpperCase()}
+            </div>
+          )}
         </div>
         <h1 className="text-2xl font-bold text-neutral-900">Meal QR Ticket</h1>
         <p className="mt-2 text-sm text-neutral-500">QR codes are generated only during breakfast and dinner service windows.</p>

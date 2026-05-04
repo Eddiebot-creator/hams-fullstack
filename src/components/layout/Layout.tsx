@@ -15,10 +15,7 @@ const navConfig = {
   student: [
     { name: "Dashboard", path: "/student", icon: Home },
     { name: "My QR", path: "/student/qr", icon: QrCode },
-    { name: "Laundry", path: "/student/laundry", icon: Shirt },
-    { name: "Updates", path: "/student/notifications", icon: Bell },
     { name: "Profile", path: "/student/profile", icon: User },
-    { name: "Settings", path: "/student/account", icon: Settings },
   ],
   kitchen: [
     { name: "Dashboard", path: "/kitchen", icon: Home },

@@ -1,13 +1,13 @@
 {
-  "name": "HAMS Service Portal",
-  "short_name": "HAMS",
-  "description": "Hostel, meal, laundry, and student service management portal.",
+  "name": "CareBridge Health",
+  "short_name": "CareBridge",
+  "description": "Connect patients to hospitals and doctors for appointments and consultations.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#0f172a",
-  "theme_color": "#4f46e5",
+  "background_color": "#f7faf8",
+  "theme_color": "#0d9488",
   "icons": [
     {
       "src": "/logo.jpg",
