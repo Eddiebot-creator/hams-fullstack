@@ -235,7 +235,6 @@ function ServiceCard({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">{title} service</p>
-          <p className="mt-1 text-lg font-black text-neutral-950">{subscribed ? "Subscribed" : "Unsubscribed"}</p>
           <p className="mt-1 text-sm font-medium text-neutral-600">{description}</p>
         </div>
         {subscribed && lockWhenSubscribed ? (
