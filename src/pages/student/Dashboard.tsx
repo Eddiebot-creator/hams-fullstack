@@ -111,7 +111,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-3 gap-2 sm:min-w-72">
             <Metric label="Meals" value={`${consumedMeals}/${meals.length || 0}`} />
             <Metric label="Laundry" value={currentLaundry?.status || "None"} />
-            <Metric label="Profile" value={`${profileCompletion}%`} />
+            {profileCompletion < 100 && <Metric label="Profile" value={`${profileCompletion}%`} />}
           </div>
         </div>
       </section>
