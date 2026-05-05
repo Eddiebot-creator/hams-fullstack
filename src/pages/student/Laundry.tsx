@@ -76,7 +76,6 @@ export default function Laundry() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">Laundry service</p>
-            <h2 className="mt-1 text-xl font-black text-neutral-950">{isSubscribed ? "Subscribed" : "Unsubscribed"}</h2>
             <p className="mt-1 text-sm font-medium text-neutral-600">Subscription controls whether you can request and process laundry drop-offs.</p>
           </div>
           {isSubscribed ? (

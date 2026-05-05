@@ -143,7 +143,6 @@ export default function QRCode() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">Meal subscription</p>
-              <p className="mt-1 text-lg font-black text-neutral-950">{isSubscribed ? "Subscribed" : "Unsubscribed"}</p>
             </div>
             {!isSubscribed ? (
               <Button type="button" variant="default" onClick={subscribeMeals}>
