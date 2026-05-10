@@ -7,7 +7,7 @@ import { api, type GlobalSearchResults } from "@/src/lib/api";
 
 const emptyResults: GlobalSearchResults = { students: [], staff: [], baskets: [], meals: [] };
 
-export default function GlobalSearch() {
+export default function GlobalSearch({ compact = false }: { compact?: boolean }) {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -48,10 +48,21 @@ export default function GlobalSearch() {
 
   return (
     <>
-      <Button type="button" variant="outline" onClick={() => setIsOpen(true)} className="hidden md:flex w-full justify-start text-neutral-500">
+      <Button
+        type="button"
+        variant={compact ? "ghost" : "outline"}
+        size={compact ? "icon" : "default"}
+        onClick={() => setIsOpen(true)}
+        className={compact ? "text-neutral-500" : "hidden md:flex w-full justify-start text-neutral-500"}
+        aria-label="Search everything"
+      >
         <Search className="w-4 h-4" />
-        Search everything
-        <span className="ml-auto text-xs text-neutral-400">Ctrl K</span>
+        {!compact && (
+          <>
+            Search everything
+            <span className="ml-auto text-xs text-neutral-400">Ctrl K</span>
+          </>
+        )}
       </Button>
 
       {isOpen && (
@@ -59,7 +70,7 @@ export default function GlobalSearch() {
           <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-neutral-100 bg-white shadow-2xl">
             <div className="flex items-center gap-3 border-b border-neutral-100 p-4">
               <Search className="w-5 h-5 text-neutral-400" />
-              <Input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find students, baskets, meals, staff..." className="border-0 focus-visible:ring-0 text-base" />
+              <Input autoFocus type="search" value={query} onChange={(event) => setQuery(event.target.value)} onInput={(event) => setQuery(event.currentTarget.value)} placeholder="Find students, baskets, meals, staff..." className="border-0 focus-visible:ring-0 text-base" />
               <button type="button" onClick={() => setIsOpen(false)} className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100">
                 <X className="w-5 h-5" />
               </button>

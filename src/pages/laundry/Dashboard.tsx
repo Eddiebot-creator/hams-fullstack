@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { Package, Shirt, CheckCircle2, AlertCircle, UserRound, ScanLine, Columns3 } from "lucide-react";
-import { Button } from "@/src/components/ui/button";
+import { Package, Shirt, CheckCircle2, AlertCircle, UserRound } from "lucide-react";
 import { api, type LaundryDashboard as LaundryDashboardData } from "@/src/lib/api";
 
 export default function LaundryDashboard() {

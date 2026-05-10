@@ -46,7 +46,7 @@ export default function AdminAudit() {
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-neutral-400" />
             </div>
-            <Input placeholder="Search actor, action, record, or date..." value={search} onChange={(event) => setSearch(event.target.value)} className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full" />
+            <Input type="search" placeholder="Search actor, action, record, or date..." value={search} onChange={(event) => setSearch(event.target.value)} onInput={(event) => setSearch(event.currentTarget.value)} className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full" />
           </div>
         </div>
 

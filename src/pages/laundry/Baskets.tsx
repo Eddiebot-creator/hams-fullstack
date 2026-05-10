@@ -20,6 +20,7 @@ export default function LaundryBaskets() {
   const [form, setForm] = useState({
     basketCode: "",
     studentId: "",
+    clothesCount: "1",
     status: "Pending",
     receivedAt: "",
     estimatedFinish: "",
@@ -36,7 +37,7 @@ export default function LaundryBaskets() {
       baskets.filter((basket) => {
         const query = search.toLowerCase();
         const matchesSearch =
-          basket.basketCode.includes(search) ||
+          basket.basketCode.toLowerCase().includes(query) ||
           basket.studentId.toLowerCase().includes(query) ||
           basket.status.toLowerCase().includes(query);
         const matchesStatus = statusFilter === "All" || basket.status === statusFilter;
@@ -53,6 +54,7 @@ export default function LaundryBaskets() {
     setForm({
       basketCode: "",
       studentId: "",
+      clothesCount: "1",
       status: "Pending",
       receivedAt: "",
       estimatedFinish: "",
@@ -66,6 +68,7 @@ export default function LaundryBaskets() {
     setForm({
       basketCode: basket.basketCode,
       studentId: basket.studentId,
+      clothesCount: String(basket.clothesCount ?? 1),
       status: basket.status,
       receivedAt: basket.receivedAt,
       estimatedFinish: basket.estimatedFinish ?? "",
@@ -83,7 +86,11 @@ export default function LaundryBaskets() {
     setError("");
 
     try {
-      const basket = editingId ? await api.updateLaundryBasket(editingId, form) : await api.createLaundryBasket(form);
+      const payload = {
+        ...form,
+        clothesCount: Math.min(30, Math.max(1, Number(form.clothesCount) || 1)),
+      };
+      const basket = editingId ? await api.updateLaundryBasket(editingId, payload) : await api.createLaundryBasket(payload);
       setBaskets((current) => editingId ? current.map((item) => item.id === editingId ? basket : item) : [basket, ...current]);
       resetForm();
       setIsAdding(false);
@@ -111,6 +118,7 @@ export default function LaundryBaskets() {
       const updated = await api.updateLaundryBasket(basket.id, {
         basketCode: basket.basketCode,
         studentId: basket.studentId,
+        clothesCount: basket.clothesCount,
         status: "Pending",
         receivedAt: basket.receivedAt,
         estimatedFinish: basket.estimatedFinish ?? "",
@@ -182,6 +190,23 @@ export default function LaundryBaskets() {
               </label>
 
               <label className="space-y-2">
+                <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
+                  <PackagePlus className="w-4 h-4 text-neutral-400" />
+                  Clothes count
+                </span>
+                <Input
+                  required
+                  type="number"
+                  min={1}
+                  max={30}
+                  inputMode="numeric"
+                  placeholder="Max 30"
+                  value={form.clothesCount}
+                  onChange={(event) => updateForm("clothesCount", String(Math.min(30, Math.max(1, Number(event.target.value) || 1))))}
+                />
+              </label>
+
+              <label className="space-y-2">
                 <SelectMenu value={form.status} onChange={(value) => updateForm("status", value)} label="Basket status" className="min-w-0" options={[
                   { value: "Pending", label: "Pending", description: "Waiting to begin" },
                   { value: "Pending Approval", label: "Pending Approval", description: "Needs admin approval" },
@@ -246,16 +271,17 @@ export default function LaundryBaskets() {
       )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden">
-        <div className="p-4 sm:p-6 border-b border-neutral-100 grid grid-cols-[minmax(0,1fr)_minmax(10.5rem,13rem)] gap-3 sm:grid-cols-[minmax(18rem,32rem)_minmax(15rem,20rem)] sm:items-end sm:justify-between">
+        <div className="p-4 sm:p-6 border-b border-neutral-100 grid grid-cols-1 gap-3 min-[560px]:grid-cols-[minmax(0,1fr)_minmax(10.5rem,13rem)] sm:grid-cols-[minmax(18rem,32rem)_minmax(15rem,20rem)] sm:items-end sm:justify-between">
           <div className="relative w-full">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-neutral-400" />
             </div>
             <Input
-              type="text"
+              type="search"
               placeholder="Search by Basket ID or Student ID..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
+              onInput={(event) => setSearch(event.currentTarget.value)}
               className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full"
             />
           </div>

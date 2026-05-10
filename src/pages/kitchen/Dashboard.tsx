@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { UtensilsCrossed, Users, CheckCircle2, Clock, UserRound, ScanLine, Bell } from "lucide-react";
-import { Button } from "@/src/components/ui/button";
+import { UtensilsCrossed, Users, CheckCircle2, Clock, UserRound } from "lucide-react";
 import { api, type KitchenDashboard as KitchenDashboardData } from "@/src/lib/api";
 
 export default function KitchenDashboard() {

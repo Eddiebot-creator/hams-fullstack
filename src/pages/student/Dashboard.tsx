@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { Bell, CheckCircle2, Clock, Moon, PackagePlus, QrCode, Shirt, UtensilsCrossed } from "lucide-react";
+import { CheckCircle2, Clock, PackagePlus, Shirt, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { CardSkeleton } from "@/src/components/ui/skeleton";
 import { api, type Notification, type StudentOverview } from "@/src/lib/api";
 
 const laundryStages = ["Pending Approval", "Pending", "Washing", "Ready", "Picked Up"];
+const maxClothesCount = 30;
 
 export default function Dashboard() {
   const [overview, setOverview] = useState<StudentOverview | null>(null);
@@ -51,8 +51,7 @@ export default function Dashboard() {
     try {
       const basket = await api.requestLaundry(studentId, {
         basketCode: `REQ${Date.now().toString().slice(-5)}`,
-        clothesCount: Math.max(1, Number(requestClothesCount) || 1),
-        receivedAt: "Requested now",
+        clothesCount: Math.min(maxClothesCount, Math.max(1, Number(requestClothesCount) || 1)),
         notes: requestNote || "Student laundry request",
       });
       setOverview((current) => current ? { ...current, laundry: [basket, ...current.laundry] } : current);
@@ -204,7 +203,15 @@ export default function Dashboard() {
               <PackagePlus className="h-4 w-4 text-indigo-600" />
               Request laundry drop-off
             </h3>
-            <Input type="number" min={1} placeholder="How many clothes?" value={requestClothesCount} onChange={(event) => setRequestClothesCount(event.target.value)} />
+            <Input
+              type="number"
+              min={1}
+              max={maxClothesCount}
+              inputMode="numeric"
+              placeholder={`How many clothes? Max ${maxClothesCount}`}
+              value={requestClothesCount}
+              onChange={(event) => setRequestClothesCount(String(Math.min(maxClothesCount, Math.max(1, Number(event.target.value) || 1))))}
+            />
             <Input placeholder="Optional note for laundry staff" value={requestNote} onChange={(event) => setRequestNote(event.target.value)} />
             <Button onClick={requestLaundry} disabled={!laundrySubscribed} className="w-full">
               {laundrySubscribed ? "Send Request" : "Subscribe to Laundry First"}
@@ -257,15 +264,6 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">{label}</p>
       <p className="mt-1 truncate text-sm font-black text-neutral-950">{value}</p>
     </div>
-  );
-}
-
-function QuickAction({ to, icon: Icon, label, tone }: { to: string; icon: typeof QrCode; label: string; tone: string }) {
-  return (
-    <Link to={to} className={`flex min-h-20 flex-col items-center justify-center gap-2 rounded-2xl border p-3 text-center text-sm font-black shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${tone}`}>
-      <Icon className="h-5 w-5" />
-      {label}
-    </Link>
   );
 }
 

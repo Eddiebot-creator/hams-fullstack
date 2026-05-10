@@ -11,7 +11,7 @@ import json
 import secrets
 import smtplib
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from functools import wraps
 from urllib.parse import parse_qs, unquote, urlparse
@@ -46,6 +46,9 @@ MEAL_WINDOWS = {
     "Dinner": {"start": "17:00", "end": "19:45", "label": "5:00 PM - 7:45 PM"},
 }
 ALLOWED_MEALS = tuple(MEAL_WINDOWS.keys())
+LAUNDRY_DROP_WINDOW = {"start": "09:00", "end": "13:00", "label": "9:00 AM - 1:00 PM"}
+LAUNDRY_MAX_CLOTHES = 30
+LAUNDRY_RETURN_HOURS = 24
 
 
 def utc_now_text():
@@ -83,6 +86,91 @@ def meal_status_for_type(meal_type, now=None):
     if current_minutes < start:
         return "Upcoming"
     return "Completed"
+
+
+def time_window_status(window, now=None):
+    current = now or local_now()
+    current_minutes = current.hour * 60 + current.minute
+    start = minutes_from_hhmm(window["start"])
+    end = minutes_from_hhmm(window["end"])
+    if start <= current_minutes <= end:
+        return "Active"
+    if current_minutes < start:
+        return "Upcoming"
+    return "Completed"
+
+
+def laundry_drop_status(now=None):
+    return time_window_status(LAUNDRY_DROP_WINDOW, now)
+
+
+def parse_clothes_count(value):
+    try:
+        count = int(value or 1)
+    except (TypeError, ValueError):
+        return None, "Clothes count must be a number."
+    if count < 1:
+        return None, "Clothes count must be at least 1."
+    if count > LAUNDRY_MAX_CLOTHES:
+        return None, f"Maximum clothes per laundry drop is {LAUNDRY_MAX_CLOTHES}."
+    return count, None
+
+
+def parse_record_datetime(value):
+    if not value:
+        return None
+
+    text = str(value).strip()
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except ValueError:
+        pass
+
+    for prefix, base_date in (
+        ("Today, ", local_now().date()),
+        ("Yesterday, ", (local_now() - timedelta(days=1)).date()),
+    ):
+        if text.startswith(prefix):
+            try:
+                parsed_time = datetime.strptime(text.replace(prefix, "", 1), "%I:%M %p").time()
+                return datetime.combine(base_date, parsed_time, APP_TIMEZONE).astimezone(timezone.utc)
+            except ValueError:
+                return None
+    return None
+
+
+def current_laundry_week_range(now=None):
+    current = now or local_now()
+    week_start = current.date() - timedelta(days=current.weekday())
+    week_end = week_start + timedelta(days=6)
+    return week_start, week_end
+
+
+def weekly_laundry_drop(student_id, exclude_basket_code=None):
+    week_start, week_end = current_laundry_week_range()
+    rows = query_all(
+        """
+        SELECT id, basket_code AS basketCode, student_id AS studentId, status,
+               clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
+        FROM laundry_baskets
+        WHERE student_id = ? AND status != 'Cancelled'
+        ORDER BY id DESC
+        """,
+        (student_id,),
+    )
+    for row in rows:
+        if exclude_basket_code and row["basketCode"] == exclude_basket_code:
+            continue
+        received_at = parse_record_datetime(row.get("receivedAt"))
+        if not received_at:
+            continue
+        received_date = received_at.astimezone(APP_TIMEZONE).date()
+        if week_start <= received_date <= week_end:
+            return row
+    return None
 
 
 def decorate_meal_row(row):
@@ -578,41 +666,6 @@ def init_db():
               decided_at TIMESTAMP
             );
 
-            CREATE TABLE IF NOT EXISTS healthcare_providers (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              doctor VARCHAR(255) NOT NULL,
-              specialty VARCHAR(255) NOT NULL,
-              hospital VARCHAR(255) NOT NULL,
-              location VARCHAR(255) NOT NULL,
-              distance VARCHAR(50) NOT NULL,
-              rating REAL NOT NULL,
-              review_count INTEGER NOT NULL,
-              next_slot VARCHAR(255) NOT NULL,
-              fee VARCHAR(255) NOT NULL,
-              wait_time VARCHAR(255) NOT NULL,
-              experience VARCHAR(255) NOT NULL,
-              consult_modes TEXT NOT NULL,
-              tags TEXT NOT NULL,
-              problems TEXT NOT NULL,
-              image TEXT NOT NULL,
-              bio TEXT NOT NULL,
-              languages TEXT NOT NULL,
-              insurance TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS healthcare_appointments (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              provider_id INTEGER NOT NULL,
-              patient_name VARCHAR(255) NOT NULL,
-              patient_phone VARCHAR(255) NOT NULL,
-              reason TEXT NOT NULL,
-              preferred_date VARCHAR(255) NOT NULL,
-              preferred_time VARCHAR(255) NOT NULL,
-              mode VARCHAR(255) NOT NULL,
-              status VARCHAR(50) NOT NULL DEFAULT 'Pending',
-              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              FOREIGN KEY (provider_id) REFERENCES healthcare_providers(id)
-            );
             """
         )
 
@@ -661,7 +714,6 @@ def ensure_database_indexes(conn):
         "CREATE INDEX IF NOT EXISTS idx_notifications_target ON notifications (user_role, student_id, is_read)",
         "CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs (created_at)",
         "CREATE INDEX IF NOT EXISTS idx_kitchen_scan_logs_student ON kitchen_scan_logs (student_id)",
-        "CREATE INDEX IF NOT EXISTS idx_healthcare_appointments_provider ON healthcare_appointments (provider_id, status)",
     ]
     for sql in indexes:
         try:
@@ -812,8 +864,6 @@ def database_counts():
         "password_reset_tokens",
         "laundry_issues",
         "approval_requests",
-        "healthcare_providers",
-        "healthcare_appointments",
     ]
     return {table: table_count_value(table) for table in tables}
 
@@ -885,162 +935,6 @@ def user_public_row(user_id):
 
 
 def seed_supporting_tables(conn):
-    if table_count(conn, "healthcare_providers") == 0:
-        provider_rows = [
-            (
-                "Dr. Amina Bello",
-                "General Physician",
-                "CedarCare Medical Centre",
-                "Wuse 2, Abuja",
-                "3.2 km",
-                4.9,
-                284,
-                "Today, 2:30 PM",
-                "NGN 12,000",
-                "8 min",
-                "11 years",
-                ["Hospital visit", "Video call"],
-                ["Fever", "Body pain", "Malaria", "Cold"],
-                ["fever", "malaria", "cold", "cough", "headache", "body pain", "infection"],
-                "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=900&q=80",
-                "Primary care physician focused on fast diagnosis, treatment planning, and clear referrals when specialist care is needed.",
-                ["English", "Hausa"],
-                ["Reliance HMO", "AXA Mansard", "Self pay"],
-            ),
-            (
-                "Dr. Tunde Adeyemi",
-                "Cardiologist",
-                "Prime Heart Hospital",
-                "Garki, Abuja",
-                "5.6 km",
-                4.8,
-                191,
-                "Tomorrow, 10:00 AM",
-                "NGN 25,000",
-                "18 min",
-                "15 years",
-                ["Hospital visit", "Follow-up chat"],
-                ["Chest pain", "Blood pressure", "Palpitations"],
-                ["chest pain", "heart", "blood pressure", "hypertension", "palpitation"],
-                "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=900&q=80",
-                "Heart specialist for blood pressure management, chest pain review, ECG interpretation, and ongoing cardiac monitoring.",
-                ["English", "Yoruba"],
-                ["AXA Mansard", "Leadway", "Self pay"],
-            ),
-            (
-                "Dr. Miriam Okonkwo",
-                "Obstetrician and Gynecologist",
-                "Bloom Women and Children Hospital",
-                "Jabi, Abuja",
-                "6.1 km",
-                4.9,
-                327,
-                "Today, 5:00 PM",
-                "NGN 18,000",
-                "12 min",
-                "13 years",
-                ["Hospital visit", "Video call"],
-                ["Pregnancy", "Women health", "Pelvic pain"],
-                ["pregnancy", "period", "pelvic", "women", "fertility", "cramps"],
-                "https://images.unsplash.com/photo-1582750433449-648ed127bb54?auto=format&fit=crop&w=900&q=80",
-                "Women's health doctor for antenatal care, pelvic symptoms, fertility concerns, and preventive checks.",
-                ["English", "Igbo"],
-                ["Reliance HMO", "NHIA", "Self pay"],
-            ),
-            (
-                "Dr. Chika Musa",
-                "Dermatologist",
-                "ClearSkin Clinic",
-                "Maitama, Abuja",
-                "4.8 km",
-                4.7,
-                146,
-                "Tomorrow, 1:30 PM",
-                "NGN 16,500",
-                "10 min",
-                "9 years",
-                ["Video call", "Hospital visit"],
-                ["Rashes", "Acne", "Skin allergy"],
-                ["rash", "skin", "acne", "itch", "allergy", "eczema"],
-                "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&w=900&q=80",
-                "Skin specialist for rashes, acne, allergies, infections, and treatment plans that fit daily routines.",
-                ["English"],
-                ["Self pay", "AXA Mansard"],
-            ),
-            (
-                "Dr. Ifeanyi Nwosu",
-                "Orthopedic Surgeon",
-                "Metro Bone and Joint Hospital",
-                "Asokoro, Abuja",
-                "7.4 km",
-                4.8,
-                213,
-                "Friday, 9:00 AM",
-                "NGN 22,000",
-                "21 min",
-                "14 years",
-                ["Hospital visit"],
-                ["Back pain", "Fracture", "Joint pain"],
-                ["bone", "fracture", "joint", "back pain", "knee", "injury", "sprain"],
-                "https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=900&q=80",
-                "Bone and joint doctor for injuries, chronic pain, mobility issues, and post-treatment follow-up.",
-                ["English", "Igbo"],
-                ["Leadway", "Self pay"],
-            ),
-        ]
-        conn.executemany(
-            """
-            INSERT INTO healthcare_providers (
-              doctor, specialty, hospital, location, distance, rating, review_count,
-              next_slot, fee, wait_time, experience, consult_modes, tags, problems,
-              image, bio, languages, insurance
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    doctor,
-                    specialty,
-                    hospital,
-                    location,
-                    distance,
-                    rating,
-                    review_count,
-                    next_slot,
-                    fee,
-                    wait_time,
-                    experience,
-                    json.dumps(consult_modes),
-                    json.dumps(tags),
-                    json.dumps(problems),
-                    image,
-                    bio,
-                    json.dumps(languages),
-                    json.dumps(insurance),
-                )
-                for (
-                    doctor,
-                    specialty,
-                    hospital,
-                    location,
-                    distance,
-                    rating,
-                    review_count,
-                    next_slot,
-                    fee,
-                    wait_time,
-                    experience,
-                    consult_modes,
-                    tags,
-                    problems,
-                    image,
-                    bio,
-                    languages,
-                    insurance,
-                ) in provider_rows
-            ],
-        )
-
     if table_count(conn, "kitchen_scan_logs") == 0:
         conn.executemany(
             """
@@ -1173,7 +1067,7 @@ def create_app():
             "/api/auth/request-password-reset",
             "/api/auth/reset-password",
         )
-        if request.path in public_paths or request.path.startswith("/api/healthcare/"):
+        if request.path in public_paths:
             return None
 
         auth_header = request.headers.get("Authorization", "")
@@ -2074,11 +1968,21 @@ def create_app():
 
         with get_connection() as conn:
             basket = conn.execute(
-                "SELECT basket_code AS basketCode, student_id AS studentId FROM laundry_baskets WHERE id = ?",
+                "SELECT basket_code AS basketCode, student_id AS studentId, received_at AS receivedAt FROM laundry_baskets WHERE id = ?",
                 (basket_id,),
             ).fetchone()
             if basket is None:
                 return jsonify({"message": "Basket not found."}), 404
+            if status == "Picked Up":
+                received_at = parse_record_datetime(basket["receivedAt"])
+                if received_at is None:
+                    return jsonify({"message": "This basket needs a valid received time before pickup/return can be recorded."}), 400
+                earliest_return = received_at + timedelta(hours=LAUNDRY_RETURN_HOURS)
+                now_utc = datetime.now(timezone.utc)
+                if now_utc < earliest_return:
+                    remaining = earliest_return - now_utc
+                    remaining_hours = max(1, int((remaining.total_seconds() + 3599) // 3600))
+                    return jsonify({"message": f"Pickup/return is only available after {LAUNDRY_RETURN_HOURS} hours or more. Try again in about {remaining_hours} hour(s)."}), 400
 
             result = conn.execute("UPDATE laundry_baskets SET status = ? WHERE id = ?", (status, basket_id))
             conn.execute(
@@ -2117,6 +2021,9 @@ def create_app():
 
         if missing_fields:
             return jsonify({"message": f"Missing required fields: {', '.join(missing_fields)}."}), 400
+        clothes_count, clothes_error = parse_clothes_count(payload.get("clothesCount", 1))
+        if clothes_error:
+            return jsonify({"message": clothes_error}), 400
 
         try:
             with get_connection() as conn:
@@ -2128,7 +2035,7 @@ def create_app():
                     (
                         payload["basketCode"],
                         payload["studentId"],
-                        max(int(payload.get("clothesCount", 1) or 1), 1),
+                        clothes_count,
                         payload["status"],
                         payload["receivedAt"],
                         payload.get("estimatedFinish"),
@@ -2179,6 +2086,9 @@ def create_app():
 
         if missing_fields:
             return jsonify({"message": f"Missing required fields: {', '.join(missing_fields)}."}), 400
+        clothes_count, clothes_error = parse_clothes_count(payload.get("clothesCount", 1))
+        if clothes_error:
+            return jsonify({"message": clothes_error}), 400
 
         try:
             with get_connection() as conn:
@@ -2191,7 +2101,7 @@ def create_app():
                     (
                         payload["basketCode"],
                         payload["studentId"],
-                        max(int(payload.get("clothesCount", 1) or 1), 1),
+                        clothes_count,
                         payload["status"],
                         payload["receivedAt"],
                         payload.get("estimatedFinish"),
@@ -2252,34 +2162,26 @@ def create_app():
     @app.post("/api/student/<student_id>/laundry-request")
     def request_laundry(student_id):
         payload = request.get_json(silent=True) or {}
-        basket_code = payload.get("basketCode") or f"REQ{student_id[-4:]}"
-        received_at = payload.get("receivedAt") or utc_now_text()
-        clothes_count = min(max(int(payload.get("clothesCount", 1) or 1), 1), 30)
+        basket_code = payload.get("basketCode") or f"REQ{student_id[-4:]}{int(time.time()) % 100000}"
+        received_at = utc_now_text()
+        estimated_finish = payload.get("estimatedFinish") or (datetime.now(timezone.utc) + timedelta(hours=LAUNDRY_RETURN_HOURS)).replace(microsecond=0).isoformat()
+        clothes_count, clothes_error = parse_clothes_count(payload.get("clothesCount", 1))
+        if clothes_error:
+            return jsonify({"message": clothes_error}), 400
         student = query_one("SELECT name, laundry_subscribed AS laundrySubscribed FROM users WHERE role = 'student' AND student_id = ?", (student_id,))
         if student is None:
             return jsonify({"message": "Student not found."}), 404
         if not bool(student.get("laundrySubscribed", 1)):
             return jsonify({"message": f"{student['name']} is not subscribed to laundry service."}), 403
+        if laundry_drop_status() != "Active":
+            return jsonify({"message": f"Laundry drop-off QR opens from {LAUNDRY_DROP_WINDOW['label']}."}), 400
 
-        # Enforce 30 clothes per week limit
-        WEEKLY_CLOTHES_LIMIT = 30
-        week_start = utc_now_text()[:10]
-        weekly_total = query_one(
-            """
-            SELECT COALESCE(SUM(clothes_count), 0) AS total
-            FROM laundry_baskets
-            WHERE student_id = ?
-              AND received_at >= DATE(?, '-6 days')
-              AND status NOT IN ('Cancelled')
-            """,
-            (student_id, week_start),
-        )
-        used = int((weekly_total or {}).get("total", 0))
-        if used + clothes_count > WEEKLY_CLOTHES_LIMIT:
-            remaining = max(WEEKLY_CLOTHES_LIMIT - used, 0)
+        existing_week = weekly_laundry_drop(student_id)
+        if existing_week is not None:
             return jsonify({
-                "message": f"Weekly limit reached. You have used {used}/{WEEKLY_CLOTHES_LIMIT} clothes this week. {remaining} remaining."
-            }), 400
+                "message": "Dropped already for the week. You can generate another laundry QR next week.",
+                "basket": existing_week,
+            }), 409
 
         try:
             with get_connection() as conn:
@@ -2288,7 +2190,7 @@ def create_app():
                     INSERT INTO laundry_baskets (basket_code, student_id, clothes_count, status, received_at, estimated_finish, notes)
                     VALUES (?, ?, ?, 'Pending Approval', ?, ?, ?)
                     """,
-                    (basket_code, student_id, clothes_count, received_at, payload.get("estimatedFinish"), payload.get("notes", "Student laundry request")),
+                    (basket_code, student_id, clothes_count, received_at, estimated_finish, payload.get("notes", "Student laundry request")),
                 )
                 conn.execute(
                     "INSERT INTO laundry_activity (basket_code, action, staff_name, activity_time) VALUES (?, 'Pending Approval', ?, ?)",
@@ -2323,7 +2225,9 @@ def create_app():
         scanned_value = payload.get("qrPayload") or payload.get("studentId") or ""
         student_id = parse_student_id_from_scan(scanned_value)
         staff_name = payload.get("staffName") or "Laundry Staff"
-        clothes_count = min(max(int(payload.get("clothesCount", 1) or 1), 1), 30)
+        clothes_count, clothes_error = parse_clothes_count(payload.get("clothesCount", 1))
+        if clothes_error:
+            return jsonify({"message": clothes_error}), 400
 
         if action not in ["receive", "return"]:
             return jsonify({"message": "Scan action must be receive or return."}), 400
@@ -2332,12 +2236,14 @@ def create_app():
 
         student = query_one(
             """
-            SELECT id, name, student_id AS studentId, status, laundry_subscribed AS laundrySubscribed
+            SELECT id, name, email, student_id AS studentId, hostel, room, gender, course, level, phone,
+                   photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
             FROM users
             WHERE role = 'student' AND student_id = ?
             """,
             (student_id,),
         )
+        student = normalize_user_row(student)
         if student is None:
             return jsonify({"message": "Student not found."}), 404
         if student["status"] != "Active":
@@ -2358,29 +2264,50 @@ def create_app():
 
             if action == "return":
                 if existing is None:
-                    return jsonify({"message": "Basket must be received before it can be returned."}), 404
+                    return jsonify({"message": "Basket must be received before pickup/return can be recorded."}), 404
                 if existing["studentId"] != student_id:
                     return jsonify({"message": "Basket does not belong to this student."}), 409
+                received_at = parse_record_datetime(existing["receivedAt"])
+                if received_at is None:
+                    return jsonify({"message": "This basket needs a valid received time before pickup/return can be recorded."}), 400
+                earliest_return = received_at + timedelta(hours=LAUNDRY_RETURN_HOURS)
+                now_utc = datetime.now(timezone.utc)
+                if now_utc < earliest_return:
+                    remaining = earliest_return - now_utc
+                    remaining_hours = max(1, int((remaining.total_seconds() + 3599) // 3600))
+                    return jsonify({"message": f"Pickup/return is only available after {LAUNDRY_RETURN_HOURS} hours or more. Try again in about {remaining_hours} hour(s)."}), 400
                 status = "Picked Up"
                 activity = "Returned to Student"
                 conn.execute("UPDATE laundry_baskets SET status = ? WHERE id = ?", (status, existing["id"]))
                 basket_id = existing["id"]
             else:
+                if laundry_drop_status() != "Active":
+                    return jsonify({"message": f"Laundry drop-off scans are open from {LAUNDRY_DROP_WINDOW['label']}."}), 400
                 status = "Pending"
                 activity = "Received by Scanner"
+                received_at = utc_now_text()
+                estimated_finish = payload.get("estimatedFinish") or (datetime.now(timezone.utc) + timedelta(hours=LAUNDRY_RETURN_HOURS)).replace(microsecond=0).isoformat()
                 if existing is None:
+                    existing_week = weekly_laundry_drop(student_id)
+                    if existing_week is not None:
+                        return jsonify({"message": "Dropped already for the week. This student can drop again next week.", "basket": existing_week}), 409
                     cursor = conn.execute(
                         """
                         INSERT INTO laundry_baskets (basket_code, student_id, clothes_count, status, received_at, estimated_finish, notes)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
                         """,
-                        (basket_code, student_id, clothes_count, status, utc_now_text(), payload.get("estimatedFinish"), payload.get("notes", "Scanned at laundry desk")),
+                        (basket_code, student_id, clothes_count, status, received_at, estimated_finish, payload.get("notes", "Confirmed by laundry scanner")),
                     )
                     basket_id = cursor.lastrowid
                 else:
                     if existing["studentId"] != student_id:
                         return jsonify({"message": "Basket code is already assigned to another student."}), 409
-                    conn.execute("UPDATE laundry_baskets SET status = ?, clothes_count = ? WHERE id = ?", (status, clothes_count, existing["id"]))
+                    if existing["status"] not in ("Pending Approval", "Pending"):
+                        return jsonify({"message": "Dropped already for the week. This laundry basket is already in progress."}), 409
+                    conn.execute(
+                        "UPDATE laundry_baskets SET status = ?, clothes_count = ?, received_at = ?, estimated_finish = ?, notes = ? WHERE id = ?",
+                        (status, clothes_count, received_at, estimated_finish, payload.get("notes") or "Confirmed by laundry scanner", existing["id"]),
+                    )
                     basket_id = existing["id"]
 
             conn.execute(
@@ -3042,130 +2969,6 @@ def create_app():
     @app.get("/api/database/summary")
     def database_summary():
         return cached_json("database_summary", 20, database_counts)
-
-    def serialize_healthcare_provider(row):
-        if row is None:
-            return None
-
-        def read_json_list(value):
-            try:
-                parsed = json.loads(value or "[]")
-                return parsed if isinstance(parsed, list) else []
-            except Exception:
-                return []
-
-        return {
-            "id": row["id"],
-            "doctor": row["doctor"],
-            "specialty": row["specialty"],
-            "hospital": row["hospital"],
-            "location": row["location"],
-            "distance": row["distance"],
-            "rating": row["rating"],
-            "reviewCount": row["review_count"],
-            "nextSlot": row["next_slot"],
-            "fee": row["fee"],
-            "waitTime": row["wait_time"],
-            "experience": row["experience"],
-            "consultModes": read_json_list(row["consult_modes"]),
-            "tags": read_json_list(row["tags"]),
-            "problems": read_json_list(row["problems"]),
-            "image": row["image"],
-            "bio": row["bio"],
-            "languages": read_json_list(row["languages"]),
-            "insurance": read_json_list(row["insurance"]),
-        }
-
-    def serialize_healthcare_appointment(row):
-        return {
-            "id": row["id"],
-            "providerId": row["provider_id"],
-            "doctor": row["doctor"],
-            "specialty": row["specialty"],
-            "hospital": row["hospital"],
-            "patientName": row["patient_name"],
-            "patientPhone": row["patient_phone"],
-            "reason": row["reason"],
-            "date": row["preferred_date"],
-            "time": row["preferred_time"],
-            "mode": row["mode"],
-            "status": row["status"],
-            "createdAt": row["created_at"],
-        }
-
-    @app.get("/api/healthcare/providers")
-    def healthcare_providers():
-        rows = query_all(
-            """
-            SELECT id, doctor, specialty, hospital, location, distance, rating, review_count,
-                   next_slot, fee, wait_time, experience, consult_modes, tags, problems,
-                   image, bio, languages, insurance
-            FROM healthcare_providers
-            ORDER BY rating DESC, review_count DESC
-            """
-        )
-        return jsonify([serialize_healthcare_provider(row) for row in rows])
-
-    @app.get("/api/healthcare/appointments")
-    def healthcare_appointments():
-        rows = query_all(
-            """
-            SELECT a.id, a.provider_id, p.doctor, p.specialty, p.hospital,
-                   a.patient_name, a.patient_phone, a.reason, a.preferred_date,
-                   a.preferred_time, a.mode, a.status, a.created_at
-            FROM healthcare_appointments a
-            JOIN healthcare_providers p ON p.id = a.provider_id
-            ORDER BY a.id DESC
-            """
-        )
-        return jsonify([serialize_healthcare_appointment(row) for row in rows])
-
-    @app.post("/api/healthcare/appointments")
-    def create_healthcare_appointment():
-        payload = request.get_json(silent=True) or {}
-        required_fields = ["providerId", "patientName", "patientPhone", "reason", "date", "time", "mode"]
-        missing = [field for field in required_fields if not str(payload.get(field, "")).strip()]
-        if missing:
-            return jsonify({"message": f"Missing required fields: {', '.join(missing)}."}), 400
-
-        provider = query_one("SELECT id FROM healthcare_providers WHERE id = ?", (payload["providerId"],))
-        if provider is None:
-            return jsonify({"message": "Provider not found."}), 404
-
-        with get_connection() as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO healthcare_appointments (
-                  provider_id, patient_name, patient_phone, reason,
-                  preferred_date, preferred_time, mode, status
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending')
-                """,
-                (
-                    payload["providerId"],
-                    payload["patientName"].strip(),
-                    payload["patientPhone"].strip(),
-                    payload["reason"].strip(),
-                    payload["date"].strip(),
-                    payload["time"].strip(),
-                    payload["mode"].strip(),
-                ),
-            )
-            appointment_id = cursor.lastrowid
-            conn.commit()
-
-        appointment = query_one(
-            """
-            SELECT a.id, a.provider_id, p.doctor, p.specialty, p.hospital,
-                   a.patient_name, a.patient_phone, a.reason, a.preferred_date,
-                   a.preferred_time, a.mode, a.status, a.created_at
-            FROM healthcare_appointments a
-            JOIN healthcare_providers p ON p.id = a.provider_id
-            WHERE a.id = ?
-            """,
-            (appointment_id,),
-        )
-        return jsonify(serialize_healthcare_appointment(appointment)), 201
 
     @app.get("/api/student/<student_id>/overview")
     def student_overview(student_id):

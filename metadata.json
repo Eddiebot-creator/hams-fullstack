@@ -1,5 +1,5 @@
 {
-  "name": "CareBridge",
-  "description": "A healthcare appointment platform that connects patients to hospitals and doctors.",
+  "name": "HAMS",
+  "description": "A hostel accommodation management system for student meals, laundry, staff workflows, and admin reporting.",
   "requestFramePermissions": []
 }

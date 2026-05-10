@@ -202,9 +202,11 @@ export default function AdminMeals() {
               <Search className="h-4 w-4 text-neutral-400" />
             </div>
             <Input
+              type="search"
               placeholder="Search meal or menu..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
+              onInput={(event) => setSearch(event.currentTarget.value)}
               className="pl-10 bg-neutral-50 border-neutral-200 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 rounded-lg w-full"
             />
           </div>
