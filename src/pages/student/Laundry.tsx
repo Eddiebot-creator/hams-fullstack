@@ -8,7 +8,7 @@ import { showToast } from "@/src/components/ui/toast";
 
 const timelineSteps = ["Pending Approval", "Pending", "Washing", "Ready", "Picked Up"];
 const maxClothesCount = 30;
-const dropWindow = { start: "09:00", end: "13:00", label: "9:00 AM - 1:00 PM" };
+const dropWindow = { start: "08:00", end: "13:00", label: "8:00 AM - 1:00 PM" };
 
 function minutes(value: string) {
   const [hour, minute] = value.split(":").map(Number);
@@ -127,7 +127,7 @@ export default function Laundry() {
     const clothesCount = Math.min(maxClothesCount, Math.max(1, Number(dropCount) || 1));
     setIsRequestingDrop(true);
     try {
-      const basketCode = `LAU${Date.now().toString().slice(-6)}`;
+      const basketCode = `LAU${studentId}-${Date.now().toString().slice(-3)}`;
       const basket = await api.requestLaundry(studentId, {
         basketCode,
         clothesCount,
@@ -263,7 +263,7 @@ export default function Laundry() {
             </div>
             <div className="ml-auto text-right">
               <p className="text-sm text-neutral-500">Dropped off</p>
-              <p className="font-medium text-neutral-900">{current?.receivedAt || "-"}</p>
+              <p className="font-medium text-neutral-900">{current?.receivedAt ? (() => { const d = new Date(current.receivedAt); return isNaN(d.getTime()) ? current.receivedAt : d.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); })() : "-"}</p>
             </div>
           </div>
           {current && (
@@ -305,7 +305,7 @@ export default function Laundry() {
                     </div>
                     <div>
                       <p className="font-medium text-neutral-900">Basket #{record.basketCode}</p>
-                      <p className="text-sm text-neutral-500">{record.receivedAt} - {record.clothesCount || 1} clothes</p>
+                      <p className="text-sm text-neutral-500">{(() => { const d = new Date(record.receivedAt || ""); return isNaN(d.getTime()) ? record.receivedAt : d.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); })()} - {record.clothesCount || 1} clothes</p>
                     </div>
                   </div>
                   <span className={`text-sm font-medium px-3 py-1 rounded-full ${bg} ${color}`}>

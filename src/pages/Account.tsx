@@ -1,8 +1,7 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { Bell, CheckCircle2, ImagePlus, KeyRound, Phone, Settings, UserRound } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Bell, CheckCircle2, ImagePlus, Phone, Settings, UserRound } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
-import { PasswordInput } from "@/src/components/ui/password-input";
 import { SelectMenu } from "@/src/components/ui/select-menu";
 import { api, type UserPreferences } from "@/src/lib/api";
 import { showToast } from "@/src/components/ui/toast";
@@ -23,7 +22,6 @@ export default function Account() {
     mealSubscribed: storedUser.mealSubscribed !== false,
     laundrySubscribed: storedUser.laundrySubscribed !== false,
   });
-  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "" });
   const [photoPreview, setPhotoPreview] = useState(storedUser.photoUrl || "");
   const [preferences, setPreferences] = useState<UserPreferences>({
     theme: "system",
@@ -79,18 +77,6 @@ export default function Account() {
       showToast("Preferences saved.");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Unable to save preferences.", "error");
-    }
-  };
-
-  const changePassword = async (event: FormEvent) => {
-    event.preventDefault();
-    setMessage("");
-    try {
-      await api.changePassword(storedUser.id, passwordForm);
-      setPasswordForm({ currentPassword: "", newPassword: "" });
-      setMessage("Password changed.");
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Unable to change password.");
     }
   };
 
@@ -211,23 +197,6 @@ export default function Account() {
           </div>
         </section>
       )}
-
-      <form onSubmit={changePassword} className="bg-white rounded-2xl shadow-sm border border-neutral-100 p-6 space-y-5">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-neutral-100 flex items-center justify-center">
-            <KeyRound className="w-5 h-5 text-neutral-600" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-neutral-900">Change Password</h2>
-            <p className="text-sm text-neutral-500">New passwords must be at least 6 characters.</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <PasswordInput required placeholder="Current password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })} />
-          <PasswordInput required placeholder="New password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })} />
-        </div>
-        <Button type="submit" variant="outline">Update Password</Button>
-      </form>
 
       <section className="bg-white rounded-2xl shadow-sm border border-neutral-100 p-6 space-y-5">
         <div className="flex items-center gap-3">
