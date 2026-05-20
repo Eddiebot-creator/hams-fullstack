@@ -6,7 +6,7 @@ import { api, type Meal, type StudentOverview } from "@/src/lib/api";
 import { showToast } from "@/src/components/ui/toast";
 
 const mealWindows = [
-  { type: "Breakfast", start: "12:00", end: "14:45", label: "12:00 PM - 2:45 PM" },
+  { type: "Breakfast", start: "9:00", end: "4:45", label: "9:00 AM - 2:45 PM" },
   { type: "Dinner", start: "17:00", end: "19:45", label: "5:00 PM - 7:45 PM" },
 ];
 

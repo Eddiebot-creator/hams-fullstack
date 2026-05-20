@@ -202,7 +202,7 @@ export default function AdminStudents() {
               <label className="space-y-2">
                 <span className="text-sm font-medium text-neutral-700 flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-neutral-400" />
-                  Hostel and room
+                  Hostel
                 </span>
                 <Input required placeholder="Blue Nile, Room 402" value={form.hostel} onChange={(event) => updateForm("hostel", event.target.value)} />
               </label>
