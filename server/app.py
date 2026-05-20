@@ -56,7 +56,7 @@ TOKEN_TTL_SECONDS = int(os.environ.get("TOKEN_TTL_SECONDS", "86400"))
 APP_TIMEZONE = ZoneInfo(os.environ.get("APP_TIMEZONE", "Africa/Lagos"))
 
 MEAL_WINDOWS = {
-    "Breakfast": {"start": "06:30", "end": "08:45", "label": "6:30 AM - 8:45 AM"},
+    "Breakfast": {"start": "9:30", "end": "14:45", "label": "9:30 AM - 2:45 PM"},
     "Dinner": {"start": "17:00", "end": "19:45", "label": "5:00 PM - 7:45 PM"},
 }
 ALLOWED_MEALS = tuple(MEAL_WINDOWS.keys())
