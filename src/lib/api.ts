@@ -141,6 +141,7 @@ export type Student = {
 export type Meal = {
   id: number;
   type: string;
+  weekday?: string;
   startTime: string;
   endTime: string;
   menu: string;
@@ -195,6 +196,7 @@ export type CreateLaundryBasketPayload = {
 
 export type CreateMealPayload = {
   type: string;
+  weekday?: string;
   startTime: string;
   endTime: string;
   menu: string;
@@ -393,7 +395,7 @@ export type DatabaseHealth = {
 export type DatabaseSummary = Record<string, number>;
 
 export const api = {
-  login: (payload: { email: string; password: string }) =>
+  login: (payload: { email: string; password: string; role?: Role | null }) =>
     request<{ user: Student & { role: Role }; token: string }>("/auth/login", {
       method: "POST",
       timeoutMs: 30000,
@@ -409,7 +411,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  globalSearch: (query: string) => request<GlobalSearchResults>(`/search?q=${encodeURIComponent(query)}`, { cacheMs: 5000 }),
+  globalSearch: (query: string) => request<GlobalSearchResults>(`/search?q=${encodeURIComponent(query.trim())}`, { cacheMs: 1200 }),
   students: () => request<Student[]>("/students", { cacheMs: 15000 }),
   studentsPage: (params: { page: number; pageSize?: number; search?: string; status?: string }) =>
     request<Paginated<Student>>(`/students?page=${params.page}&pageSize=${params.pageSize ?? 20}&search=${encodeURIComponent(params.search ?? "")}&status=${encodeURIComponent(params.status ?? "All")}`, { cacheMs: 8000 }),

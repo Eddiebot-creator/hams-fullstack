@@ -4,7 +4,10 @@ services:
     runtime: python
     plan: free
     buildCommand: |
-      pip install -r requirements.txt
-      npm install
-      npm run build
-    startCommand: gunicorn server.app:app
+      pip install -r backend/requirements.txt
+      npm install --prefix frontend
+      npm run build --prefix frontend
+    startCommand: gunicorn --chdir backend server.app:app
+    envVars:
+      - key: STATIC_DIR
+        value: /opt/render/project/src/frontend/dist

@@ -3,12 +3,29 @@ import { useNavigate } from "react-router-dom";
 import { Search, Shirt, UserRound, UtensilsCrossed, X } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
-import { api, type GlobalSearchResults } from "@/src/lib/api";
+import { api, type GlobalSearchResults, type Role } from "@/src/lib/api";
 
 const emptyResults: GlobalSearchResults = { students: [], staff: [], baskets: [], meals: [] };
 
+const roleHome: Record<Role, string> = {
+  student: "/student",
+  kitchen: "/kitchen",
+  laundry: "/laundry-staff",
+  admin: "/admin",
+};
+
+function getCurrentRole(): Role | null {
+  try {
+    const user = JSON.parse(localStorage.getItem("hamsUser") || "{}");
+    return user?.role ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default function GlobalSearch({ compact = false }: { compact?: boolean }) {
   const navigate = useNavigate();
+  const currentRole = getCurrentRole();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GlobalSearchResults>(emptyResults);
@@ -30,7 +47,7 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
   }, []);
 
   useEffect(() => {
-    if (!isOpen || query.trim().length < 2) {
+    if (!isOpen || query.trim().length < 1) {
       setResults(emptyResults);
       return;
     }
@@ -44,6 +61,45 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
     setIsOpen(false);
     setQuery("");
     navigate(path);
+  };
+
+  const quickActions = useMemo(() => {
+    if (currentRole === "admin") {
+      return [
+        { label: "Admin dashboard", path: "/admin" },
+        { label: "Add students", path: "/admin/students" },
+        { label: "Manage meals", path: "/admin/meals" },
+        { label: "Staff accounts", path: "/admin/staff" },
+      ];
+    }
+    if (currentRole === "laundry") {
+      return [
+        { label: "Laundry dashboard", path: "/laundry-staff" },
+        { label: "Manage baskets", path: "/laundry-staff/baskets" },
+        { label: "Laundry board", path: "/laundry-staff/board" },
+        { label: "Laundry scanner", path: "/laundry-staff/scanner" },
+      ];
+    }
+    if (currentRole === "kitchen") {
+      return [
+        { label: "Kitchen dashboard", path: "/kitchen" },
+        { label: "Kitchen scanner", path: "/kitchen/scanner" },
+        { label: "Updates", path: "/kitchen/notifications" },
+      ];
+    }
+    return [
+      { label: "Student dashboard", path: "/student" },
+      { label: "My QR code", path: "/student/qr" },
+      { label: "My laundry", path: "/student/laundry" },
+      { label: "Profile", path: "/student/profile" },
+    ];
+  }, [currentRole]);
+
+  const safeUserPath = (userId: number, studentId?: string) => {
+    if (currentRole === "admin") return `/admin/users/${userId}`;
+    if (currentRole === "laundry") return `/laundry-staff/baskets${studentId ? `?search=${encodeURIComponent(studentId)}` : ""}`;
+    if (currentRole === "kitchen") return "/kitchen/scanner";
+    return currentRole ? roleHome[currentRole] : "/login";
   };
 
   return (
@@ -70,7 +126,7 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
           <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-neutral-100 bg-white shadow-2xl">
             <div className="flex items-center gap-3 border-b border-neutral-100 p-4">
               <Search className="w-5 h-5 text-neutral-400" />
-              <Input autoFocus type="search" value={query} onChange={(event) => setQuery(event.target.value)} onInput={(event) => setQuery(event.currentTarget.value)} placeholder="Find students, baskets, meals, staff..." className="border-0 focus-visible:ring-0 text-base" />
+              <Input autoFocus type="search" value={query} onChange={(event) => setQuery(event.target.value)} onInput={(event) => setQuery(event.currentTarget.value)} placeholder="Search name, matric no, room, hostel, basket, meal, status..." className="border-0 focus-visible:ring-0 text-base" />
               <button type="button" onClick={() => setIsOpen(false)} className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100">
                 <X className="w-5 h-5" />
               </button>
@@ -80,15 +136,14 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
                 <div className="space-y-3 py-4">
                   <p className="text-sm font-semibold text-neutral-500">Quick launcher</p>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    <QuickSearchAction label="Admin dashboard" onClick={() => closeAndGo("/admin")} />
-                    <QuickSearchAction label="Add students" onClick={() => closeAndGo("/admin/students")} />
-                    <QuickSearchAction label="Kitchen scanner" onClick={() => closeAndGo("/kitchen/scanner")} />
-                    <QuickSearchAction label="Laundry board" onClick={() => closeAndGo("/laundry-staff/board")} />
+                    {quickActions.map((action) => (
+                      <QuickSearchAction key={action.path} label={action.label} onClick={() => closeAndGo(action.path)} />
+                    ))}
                   </div>
-                  <p className="pt-4 text-center text-sm text-neutral-500">Type at least 2 characters to search records.</p>
+                  <p className="pt-4 text-center text-sm text-neutral-500">Type a name, matric number, room, hostel, basket code, meal, or status.</p>
                 </div>
               ) : resultCount === 0 ? (
-                <p className="text-sm text-neutral-500 text-center py-10">No matching records found.</p>
+                <p className="text-sm text-neutral-500 text-center py-10">No related records found. Try a student name, matric number, hostel, room, basket code, meal, or status.</p>
               ) : (
                 <>
                   <ResultGroup
@@ -96,8 +151,8 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
                     icon={UserRound}
                     items={results.students.map((student) => ({
                       label: `${student.name} - ${student.studentId}`,
-                      detail: `${student.hostel}${student.room ? `, room ${student.room}` : ""} - ${student.status}`,
-                      onClick: () => closeAndGo(`/admin/users/${student.id}`),
+                      detail: `${student.hostel}${student.room ? `, room ${student.room}` : ""}${student.course ? ` - ${student.course}` : ""} - ${student.status}`,
+                      onClick: () => closeAndGo(safeUserPath(student.id, student.studentId)),
                     }))}
                   />
                   <ResultGroup
@@ -106,7 +161,7 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
                     items={results.staff.map((staff) => ({
                       label: `${staff.name} - ${staff.role}`,
                       detail: `${staff.email} - ${staff.status}`,
-                      onClick: () => closeAndGo(`/admin/users/${staff.id}`),
+                      onClick: () => closeAndGo(safeUserPath(staff.id)),
                     }))}
                   />
                   <ResultGroup
@@ -114,17 +169,17 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
                     icon={Shirt}
                     items={results.baskets.map((basket) => ({
                       label: `#${basket.basketCode} - ${basket.status}`,
-                      detail: `${basket.studentId} - ${basket.receivedAt}`,
-                      onClick: () => closeAndGo("/laundry-staff/board"),
+                      detail: `${basket.studentId} - ${basket.receivedAt}${basket.notes ? ` - ${basket.notes}` : ""}`,
+                      onClick: () => closeAndGo(currentRole === "laundry" ? `/laundry-staff/baskets?search=${encodeURIComponent(basket.basketCode)}` : roleHome[currentRole ?? "student"]),
                     }))}
                   />
                   <ResultGroup
                     title="Meals"
                     icon={UtensilsCrossed}
                     items={results.meals.map((meal) => ({
-                      label: `${meal.type} - ${meal.status}`,
-                      detail: meal.menu,
-                      onClick: () => closeAndGo("/admin/meals"),
+                      label: `${meal.weekday ?? ""} ${meal.type} - ${meal.status}`.trim(),
+                      detail: `${meal.startTime ?? ""}${meal.endTime ? ` - ${meal.endTime}` : ""}${meal.menu ? ` • ${meal.menu}` : ""}`,
+                      onClick: () => closeAndGo(currentRole === "admin" ? "/admin/meals" : roleHome[currentRole ?? "student"]),
                     }))}
                   />
                 </>

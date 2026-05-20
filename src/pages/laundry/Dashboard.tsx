@@ -1,7 +1,24 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Package, Shirt, CheckCircle2, AlertCircle, UserRound } from "lucide-react";
+import { Package, Shirt, CheckCircle2, AlertCircle, UserRound, Clock3 } from "lucide-react";
 import { api, type LaundryDashboard as LaundryDashboardData } from "@/src/lib/api";
+
+function LaundryStatusChip({ value }: { value: string }) {
+  const tone = value.toLowerCase().includes("pending")
+    ? "bg-amber-100 text-amber-800 border-amber-200"
+    : value.toLowerCase().includes("washing")
+      ? "bg-indigo-100 text-indigo-800 border-indigo-200"
+      : value.toLowerCase().includes("ready")
+        ? "bg-green-100 text-green-800 border-green-200"
+        : value.toLowerCase().includes("picked")
+          ? "bg-neutral-100 text-neutral-800 border-neutral-200"
+          : value.toLowerCase().includes("issue") || value.toLowerCase().includes("error")
+            ? "bg-red-100 text-red-800 border-red-200"
+            : "bg-sky-100 text-sky-800 border-sky-200";
+  return <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${tone}`}>{value}</span>;
+}
+
+const timelineSteps = ["Pending", "Washing", "Ready", "Picked Up"];
 
 export default function LaundryDashboard() {
   const [dashboard, setDashboard] = useState<LaundryDashboardData | null>(null);
@@ -14,6 +31,20 @@ export default function LaundryDashboard() {
   }, []);
 
   const counts = dashboard?.statusCounts ?? { pending: 0, washing: 0, ready: 0, issues: 0 };
+
+  const formatActivityTime = (value: string) => {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    }
+    return value || "Time not recorded";
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
@@ -102,6 +133,32 @@ export default function LaundryDashboard() {
         </motion.div>
       </div>
 
+      <div className="rounded-2xl border border-neutral-100 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-neutral-900">Basket Timeline</h2>
+            <p className="text-sm text-neutral-500">Cleaner visual flow from drop-off to pickup.</p>
+          </div>
+          <Clock3 className="h-5 w-5 text-indigo-600" />
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-4">
+          {timelineSteps.map((step, index) => (
+            <div key={step} className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <LaundryStatusChip value={step} />
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-black text-neutral-500 shadow-sm">{index + 1}</span>
+              </div>
+              <p className="mt-3 text-xs font-medium text-neutral-500">
+                {step === "Pending" && "Basket received and waiting for laundry staff."}
+                {step === "Washing" && "Basket is currently being processed."}
+                {step === "Ready" && "Clean laundry is ready for collection."}
+                {step === "Picked Up" && "Student has collected the basket."}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden mt-8">
         <div className="p-6 border-b border-neutral-100">
           <h2 className="text-lg font-semibold text-neutral-900">Recent Activity</h2>
@@ -119,10 +176,10 @@ export default function LaundryDashboard() {
             <tbody className="bg-white divide-y divide-neutral-200">
               {(dashboard?.activity ?? []).map((activity) => (
                 <tr key={activity.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{activity.activityTime}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-neutral-800">{formatActivityTime(activity.activityTime)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900 font-mono">#{activity.basketCode}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{activity.action}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{activity.staffName}</td>
+                  <td className="px-6 py-4 whitespace-nowrap"><LaundryStatusChip value={activity.action} /></td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-700">{activity.staffName}</td>
                 </tr>
               ))}
             </tbody>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { Activity, Users, UtensilsCrossed, Shirt, TrendingUp } from "lucide-react";
+import { Activity, Users, UtensilsCrossed, Shirt, TrendingUp, FileBarChart2 } from "lucide-react";
 import { api, type AdminDashboard as AdminDashboardData, type AuditLog, type LaundryBasket } from "@/src/lib/api";
 
 export default function AdminDashboard() {
@@ -107,26 +107,26 @@ export default function AdminDashboard() {
           className="bg-white rounded-2xl p-6 shadow-sm border border-neutral-100"
         >
           <h2 className="text-lg font-semibold text-neutral-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <Link to="/admin/students" className="group p-4 rounded-2xl bg-neutral-50 border border-neutral-200 hover:bg-indigo-50 hover:border-indigo-200 hover:shadow-md transition-all text-left active:translate-y-px">
-              <Users className="w-6 h-6 text-indigo-600 mb-2" />
-              <p className="font-medium text-neutral-900">Add Student</p>
-              <p className="text-xs text-neutral-500 mt-1">Register a new student</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Link to="/admin/students" className="group rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-300 hover:bg-white hover:shadow-md active:translate-y-px">
+              <Users className="mb-3 h-6 w-6 text-indigo-600" />
+              <p className="font-black text-neutral-900">Add Student</p>
+              <p className="mt-1 text-xs font-medium text-neutral-500">Register and manage student accounts</p>
             </Link>
-            <Link to="/admin/meals" className="group p-4 rounded-2xl bg-neutral-50 border border-neutral-200 hover:bg-green-50 hover:border-green-200 hover:shadow-md transition-all text-left active:translate-y-px">
-              <UtensilsCrossed className="w-6 h-6 text-indigo-600 mb-2" />
-              <p className="font-medium text-neutral-900">Update Menu</p>
-              <p className="text-xs text-neutral-500 mt-1">Change today's meals</p>
+            <Link to="/admin/meals" className="group rounded-2xl border border-green-100 bg-green-50 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-green-300 hover:bg-white hover:shadow-md active:translate-y-px">
+              <UtensilsCrossed className="mb-3 h-6 w-6 text-green-600" />
+              <p className="font-black text-neutral-900">Edit Meals</p>
+              <p className="mt-1 text-xs font-medium text-neutral-500">Update daily and weekend menus</p>
             </Link>
-            <Link to="/admin/analytics" className="group p-4 rounded-2xl bg-neutral-50 border border-neutral-200 hover:bg-blue-50 hover:border-blue-200 hover:shadow-md transition-all text-left active:translate-y-px">
-              <Shirt className="w-6 h-6 text-indigo-600 mb-2" />
-              <p className="font-medium text-neutral-900">Laundry Schedule</p>
-              <p className="text-xs text-neutral-500 mt-1">Manage drop-off times</p>
+            <Link to="/laundry-staff/board" className="group rounded-2xl border border-sky-100 bg-sky-50 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:bg-white hover:shadow-md active:translate-y-px">
+              <Shirt className="mb-3 h-6 w-6 text-sky-600" />
+              <p className="font-black text-neutral-900">View Laundry</p>
+              <p className="mt-1 text-xs font-medium text-neutral-500">Track baskets and approvals</p>
             </Link>
-            <Link to="/admin/audit" className="group p-4 rounded-2xl bg-neutral-50 border border-neutral-200 hover:bg-purple-50 hover:border-purple-200 hover:shadow-md transition-all text-left active:translate-y-px">
-              <TrendingUp className="w-6 h-6 text-indigo-600 mb-2" />
-              <p className="font-medium text-neutral-900">Generate Report</p>
-              <p className="text-xs text-neutral-500 mt-1">Export system data</p>
+            <Link to="/admin/analytics" className="group rounded-2xl border border-purple-100 bg-purple-50 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-purple-300 hover:bg-white hover:shadow-md active:translate-y-px">
+              <FileBarChart2 className="mb-3 h-6 w-6 text-purple-600" />
+              <p className="font-black text-neutral-900">View Reports</p>
+              <p className="mt-1 text-xs font-medium text-neutral-500">Open analytics and performance data</p>
             </Link>
           </div>
         </motion.div>

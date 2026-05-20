@@ -11,6 +11,29 @@ const columns = [
   { status: "Picked Up", title: "Picked Up", icon: Sparkles, tone: "bg-neutral-50 border-neutral-100 text-neutral-700" },
 ];
 
+function MiniTimeline({ status }: { status: string }) {
+  const steps = ["Pending", "Washing", "Ready", "Picked Up"];
+  const activeIndex = Math.max(steps.indexOf(status), status === "Pending Approval" ? 0 : 0);
+  return (
+    <div className="mt-3 flex items-center gap-1.5">
+      {steps.map((step, index) => (
+        <div key={step} className={`h-1.5 flex-1 rounded-full ${index <= activeIndex ? "bg-indigo-500" : "bg-neutral-200"}`} title={step} />
+      ))}
+    </div>
+  );
+}
+
+function StatusPill({ value }: { value: string }) {
+  const tone = value === "Pending Approval" || value === "Pending"
+    ? "bg-amber-100 text-amber-800 border-amber-200"
+    : value === "Washing"
+      ? "bg-indigo-100 text-indigo-800 border-indigo-200"
+      : value === "Ready"
+        ? "bg-green-100 text-green-800 border-green-200"
+        : "bg-neutral-100 text-neutral-700 border-neutral-200";
+  return <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${tone}`}>{value}</span>;
+}
+
 export default function LaundryBoard() {
   const [baskets, setBaskets] = useState<LaundryBasket[]>([]);
   const [message, setMessage] = useState("");
@@ -67,12 +90,16 @@ export default function LaundryBoard() {
                   <p className="text-sm text-neutral-400 p-3">No baskets here.</p>
                 ) : (
                   grouped[column.status].map((basket) => (
-                    <div key={basket.id} className="rounded-xl border border-neutral-100 bg-neutral-50 p-3">
+                    <div key={basket.id} className="rounded-xl border border-neutral-100 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
                       <div className="flex items-center justify-between gap-2">
                         <p className="font-semibold text-neutral-900">#{basket.basketCode}</p>
                         <p className="text-xs text-neutral-500 font-mono">{basket.studentId}</p>
                       </div>
-                      <p className="text-xs text-neutral-500 mt-2">{basket.receivedAt}</p>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <StatusPill value={basket.status} />
+                        <p className="text-xs text-neutral-500">{basket.receivedAt}</p>
+                      </div>
+                      <MiniTimeline status={basket.status} />
                       {basket.notes && <p className="text-sm text-neutral-600 mt-2">{basket.notes}</p>}
                       {nextStatus && (
                         <Button size="sm" className="w-full mt-3 bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => moveBasket(basket, nextStatus)}>

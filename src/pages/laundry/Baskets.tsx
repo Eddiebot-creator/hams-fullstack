@@ -7,6 +7,33 @@ import { SelectMenu } from "@/src/components/ui/select-menu";
 import { api, type LaundryBasket } from "@/src/lib/api";
 import { ConfirmDialog } from "@/src/components/ui/confirm-dialog";
 
+const basketStatusOptions = [
+  { value: "Pending Approval", label: "Pending Approval", description: "Needs admin approval" },
+  { value: "Pending", label: "Pending", description: "Waiting to start" },
+  { value: "Washing", label: "Washing", description: "Currently washing" },
+  { value: "Ready", label: "Ready", description: "Ready for pickup" },
+  { value: "Picked Up", label: "Picked Up", description: "Returned to student" },
+];
+
+function BasketStatusSelect({
+  value,
+  onChange,
+  compact = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  compact?: boolean;
+}) {
+  return (
+    <SelectMenu
+      value={value}
+      onChange={onChange}
+      options={basketStatusOptions}
+      className={compact ? "min-w-0 w-44" : "min-w-0 w-full sm:w-52"}
+    />
+  );
+}
+
 export default function LaundryBaskets() {
   const [baskets, setBaskets] = useState<LaundryBasket[]>([]);
   const [search, setSearch] = useState("");
@@ -113,6 +140,21 @@ export default function LaundryBaskets() {
     }
   };
 
+
+  const changeBasketStatus = async (basket: LaundryBasket, status: string) => {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem("hamsUser") || "{}");
+      const updated = await api.updateLaundryBasketStatus(basket.id, {
+        status,
+        staffName: storedUser.name || "Laundry Staff",
+      });
+      setBaskets((current) => current.map((item) => item.id === basket.id ? updated : item));
+      setMessage(`Basket #${basket.basketCode} moved to ${status}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update basket status.");
+    }
+  };
+
   const approveBasket = async (basket: LaundryBasket) => {
     try {
       const updated = await api.updateLaundryBasket(basket.id, {
@@ -157,7 +199,7 @@ export default function LaundryBaskets() {
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           onSubmit={handleAddBasket}
-          className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden"
+          className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-visible"
         >
           <div className="border-b border-neutral-100 bg-neutral-50 px-6 py-4">
             <div className="flex items-center gap-3">
@@ -270,7 +312,7 @@ export default function LaundryBaskets() {
         </motion.form>
       )}
 
-      <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border border-neutral-100 overflow-visible">
         <div className="p-4 sm:p-6 border-b border-neutral-100 grid grid-cols-1 gap-3 min-[560px]:grid-cols-[minmax(0,1fr)_minmax(10.5rem,13rem)] sm:grid-cols-[minmax(18rem,32rem)_minmax(15rem,20rem)] sm:items-end sm:justify-between">
           <div className="relative w-full">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -287,14 +329,13 @@ export default function LaundryBaskets() {
           </div>
           <div className="flex items-end gap-2 w-full min-w-0">
             <Filter className="mb-4 hidden w-4 h-4 text-neutral-400 sm:block" />
-            <SelectMenu value={statusFilter} onChange={setStatusFilter} label="Status" className="min-w-0 w-full" options={[
-              { value: "All", label: "All statuses", description: "Every basket" },
-              { value: "Pending Approval", label: "Pending Approval", description: "Needs review" },
-              { value: "Pending", label: "Pending", description: "Waiting" },
-              { value: "Washing", label: "Washing", description: "In progress" },
-              { value: "Ready", label: "Ready", description: "Ready baskets" },
-              { value: "Picked Up", label: "Picked Up", description: "Completed" },
-            ]} />
+            <SelectMenu
+              value={statusFilter}
+              onChange={setStatusFilter}
+              label="Status"
+              className="min-w-0 w-full"
+              options={[{ value: "All", label: "All statuses", description: "Every basket" }, ...basketStatusOptions]}
+            />
           </div>
         </div>
         
@@ -306,14 +347,11 @@ export default function LaundryBaskets() {
                   <p className="font-semibold text-neutral-900 font-mono">#{basket.basketCode}</p>
                   <p className="text-sm text-neutral-500 font-mono">{basket.studentId}</p>
                 </div>
-                <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                  basket.status === 'Ready' ? 'bg-green-100 text-green-800' :
-                  basket.status === 'Washing' ? 'bg-indigo-100 text-indigo-800' :
-                  basket.status === 'Pending' || basket.status === 'Pending Approval' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-neutral-100 text-neutral-800'
-                }`}>
-                  {basket.status}
-                </span>
+                <BasketStatusSelect
+                  value={basket.status}
+                  onChange={(value) => changeBasketStatus(basket, value)}
+                  compact
+                />
               </div>
               <p className="text-sm text-neutral-500 mt-3">{basket.receivedAt}</p>
               {basket.notes && <p className="text-sm text-neutral-600 mt-2">{basket.notes}</p>}
@@ -327,7 +365,7 @@ export default function LaundryBaskets() {
           {filteredBaskets.length === 0 && <p className="text-sm text-neutral-500 text-center py-8">No baskets match your search.</p>}
         </div>
 
-        <div className="hidden overflow-x-auto md:block">
+        <div className="hidden overflow-visible md:block">
           <table className="min-w-full divide-y divide-neutral-200">
             <thead className="bg-neutral-50">
               <tr>
@@ -344,16 +382,13 @@ export default function LaundryBaskets() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900 font-mono">#{basket.basketCode}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-mono">{basket.studentId}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      basket.status === 'Ready' ? 'bg-green-100 text-green-800' :
-                      basket.status === 'Washing' ? 'bg-indigo-100 text-indigo-800' :
-                      basket.status === 'Pending' || basket.status === 'Pending Approval' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-neutral-100 text-neutral-800'
-                    }`}>
-                      {basket.status}
-                    </span>
+                <BasketStatusSelect
+                  value={basket.status}
+                  onChange={(value) => changeBasketStatus(basket, value)}
+                  compact
+                />
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{basket.receivedAt}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-neutral-700">{basket.receivedAt}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     {basket.status === "Pending Approval" && (
                       <button onClick={() => approveBasket(basket)} className="text-green-700 hover:text-green-900 mr-3 font-semibold">

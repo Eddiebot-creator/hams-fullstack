@@ -43,9 +43,14 @@ export default function Login() {
     setIsLoading(true);
     setError("");
     try {
-      const { user, token } = await api.login({ email, password });
+      const { user, token } = await api.login({ email, password, role: selectedRole });
       localStorage.setItem("hamsUser", JSON.stringify(user));
       localStorage.setItem("hamsToken", token);
+      if (user.role !== selectedRole) {
+        localStorage.removeItem("hamsUser");
+        localStorage.removeItem("hamsToken");
+        throw new Error(`This account is registered as ${user.role}. Please use the ${user.role} login card.`);
+      }
       showToast(`Welcome, ${user.name}.`);
       navigate(destinations[user.role]);
     } catch (err) {
@@ -60,10 +65,10 @@ export default function Login() {
   if (!selectedRole) {
     return (
       <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4 sm:p-6 lg:p-8">
-        <div className="w-full max-w-2xl">
+        <div className="w-full max-w-4xl">
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
             <div className="flex items-center justify-center gap-4 mb-4">
-              <div className="w-16 h-16 rounded-2xl bg-white border border-neutral-100 shadow-sm flex items-center justify-center overflow-hidden">
+              <div className="w-16 h-16 rounded-2xl bg-white border border-neutral-100 shadow-md flex items-center justify-center overflow-hidden">
                 <img src="/logo.jpg" alt="Nile University Logo" className="w-full h-full object-contain p-1" />
               </div>
               <div className="text-left">
@@ -71,7 +76,6 @@ export default function Login() {
                 <h1 className="text-3xl font-bold text-neutral-950">HAMS</h1>
               </div>
             </div>
-            <p className="text-neutral-500 text-sm mt-2">Select your role to sign in</p>
           </motion.div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {roleOptions.map((option, i) => {
@@ -83,7 +87,7 @@ export default function Login() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.08 }}
                   onClick={() => setSelectedRole(option.role)}
-                  className={`text-left rounded-2xl border-2 bg-white p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 ${roleColors[option.role]}`}
+                  className={`text-left rounded-2xl border-2 bg-white p-4 sm:p-5 shadow-sm hover:shadow-lg transition-all hover:-translate-y-0.5 ${roleColors[option.role]}`}
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">

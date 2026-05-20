@@ -487,3 +487,15 @@ button:not([class]) {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+
+/* Production contrast fixes: keep timestamps, dropdowns and status labels readable on desktop/mobile. */
+html[data-theme="dark"] .text-green-800 { color: rgb(134 239 172); }
+html[data-theme="dark"] .text-indigo-800 { color: rgb(199 210 254); }
+html[data-theme="dark"] .text-neutral-800 { color: rgb(241 245 249); }
+html[data-theme="dark"] .bg-neutral-50 select,
+html[data-theme="dark"] select.bg-white {
+  background-color: rgb(15 23 42);
+  color: rgb(248 250 252);
+  border-color: rgb(71 85 105);
+}

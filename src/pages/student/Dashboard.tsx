@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { CheckCircle2, Clock, PackagePlus, Shirt, UtensilsCrossed } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock, PackagePlus, Shirt, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { CardSkeleton } from "@/src/components/ui/skeleton";
@@ -8,6 +8,9 @@ import { api, type Notification, type StudentOverview } from "@/src/lib/api";
 
 const laundryStages = ["Pending Approval", "Pending", "Washing", "Ready", "Picked Up"];
 const maxClothesCount = 30;
+const weekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const shortWeekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const todayName = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date());
 
 export default function Dashboard() {
   const [overview, setOverview] = useState<StudentOverview | null>(null);
@@ -16,6 +19,7 @@ export default function Dashboard() {
   const [requestNote, setRequestNote] = useState("");
   const [requestClothesCount, setRequestClothesCount] = useState("1");
   const [message, setMessage] = useState("");
+  const [selectedMealDay, setSelectedMealDay] = useState(weekDays.includes(todayName) ? todayName : "Monday");
 
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem("hamsUser") || "{}");
@@ -27,6 +31,10 @@ export default function Dashboard() {
   }, []);
 
   const meals = overview?.meals ?? [];
+  const selectedDayMeals = meals.filter((meal) => (meal.weekday ?? "Monday") === selectedMealDay);
+  const visibleMeals = selectedDayMeals.length ? selectedDayMeals : meals.filter((meal) => !meal.weekday && selectedMealDay === "Monday");
+  const activeUpcomingMeals = visibleMeals.filter((meal) => !meal.consumed && !["Completed", "Unavailable"].includes(meal.status || ""));
+  const selectedRemainingMeals = activeUpcomingMeals.length;
   const currentLaundry = overview?.laundry[0];
   const studentId = overview?.student.studentId ?? "240011223";
   const remainingMeals = meals.filter((meal) => !meal.consumed).length;
@@ -139,27 +147,58 @@ export default function Dashboard() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="flex items-center gap-2 text-lg font-bold text-neutral-950">
               <UtensilsCrossed className="h-5 w-5 text-indigo-600" />
-              Today's Meals
+              Weekly Meal Schedule
             </h2>
-            <span className="w-fit rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">{remainingMeals} remaining</span>
+            <span className="w-fit rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">{selectedRemainingMeals} remaining for {selectedMealDay}</span>
+          </div>
+
+          <div className="mt-4 flex gap-2 overflow-x-auto pb-2 sm:grid sm:grid-cols-7 sm:overflow-visible sm:pb-0">
+            {weekDays.map((day, index) => {
+              const active = selectedMealDay === day;
+              const dayMealCount = meals.filter((meal) => (meal.weekday ?? "Monday") === day).length;
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => setSelectedMealDay(day)}
+                  className={`relative min-w-20 rounded-2xl border px-3 py-3 text-center transition ${active ? "border-indigo-600 bg-indigo-600 text-white shadow-sm" : "border-neutral-200 bg-neutral-50 text-neutral-700 hover:border-indigo-200 hover:bg-indigo-50"}`}
+                >
+                  {day === todayName && (
+                    <span className={`absolute -right-1 -top-2 rounded-full px-2 py-0.5 text-[10px] font-black uppercase shadow-sm ${active ? "bg-white text-indigo-700" : "bg-indigo-600 text-white"}`}>Today</span>
+                  )}
+                  <span className="block text-xs font-black uppercase tracking-wide">{shortWeekDays[index]}</span>
+                  <span className={`mt-1 block text-[11px] font-bold ${active ? "text-indigo-100" : "text-neutral-500"}`}>{dayMealCount || 0} meals</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-indigo-700" />
+              <p className="text-sm font-black text-indigo-950">Upcoming meals for {selectedMealDay}</p>
+            </div>
+            <p className="mt-1 text-xs font-semibold text-indigo-700">Tap another day above to quickly view that day's breakfast and dinner.</p>
           </div>
 
           <div className="mt-5 grid gap-3">
             {meals.length === 0 ? (
               <EmptyPanel title="No meals scheduled" message="Meal records will appear here after admin creates them." />
-            ) : meals.map((meal) => (
-              <div key={meal.id} className={`rounded-2xl border p-4 ${meal.consumed ? "border-green-100 bg-green-50" : "border-neutral-100 bg-neutral-50"}`}>
+            ) : visibleMeals.length === 0 ? (
+              <EmptyPanel title={`No meals for ${selectedMealDay}`} message="Admin has not added meals for this day yet." />
+            ) : activeUpcomingMeals.length === 0 ? (
+              <EmptyPanel title={`No active or upcoming meals for ${selectedMealDay}`} message="Meals for this day are already completed, collected, or unavailable." />
+            ) : activeUpcomingMeals.map((meal) => (
+              <div key={meal.id} className="rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-bold text-neutral-950">{meal.type}</p>
                     <p className="text-sm font-medium text-neutral-500">{meal.startTime} - {meal.endTime}</p>
                   </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${meal.consumed ? "bg-green-100 text-green-800" : "bg-white text-neutral-600"}`}>
-                    {meal.consumed ? "Collected" : meal.status}
-                  </span>
+                  <MealStatusChip status={meal.status} consumed={meal.consumed} />
                 </div>
                 <p className="mt-3 text-sm text-neutral-600">{meal.menu}</p>
-                {meal.scannedAt && <p className="mt-2 text-xs font-semibold text-green-700">Scanned {meal.scannedAt}</p>}
+                {selectedMealDay === todayName && <p className="mt-2 text-xs font-black uppercase tracking-wide text-indigo-700">Today&apos;s schedule</p>}
               </div>
             ))}
           </div>
@@ -265,6 +304,18 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="mt-1 truncate text-sm font-black text-neutral-950">{value}</p>
     </div>
   );
+}
+
+function MealStatusChip({ status, consumed }: { status?: string; consumed?: boolean }) {
+  const label = consumed ? "Collected" : status || "Upcoming";
+  const tone = label === "Active"
+    ? "bg-green-100 text-green-800 border-green-200"
+    : label === "Upcoming"
+      ? "bg-indigo-100 text-indigo-800 border-indigo-200"
+      : label === "Collected"
+        ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+        : "bg-neutral-100 text-neutral-700 border-neutral-200";
+  return <span className={`rounded-full border px-3 py-1 text-xs font-black ${tone}`}>{label}</span>;
 }
 
 function EmptyPanel({ title, message }: { title: string; message: string }) {

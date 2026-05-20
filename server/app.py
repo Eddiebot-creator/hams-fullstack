@@ -26,13 +26,27 @@ except ImportError:
     pymysql = None
 
 
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).resolve().parent
+
+# Load .env before reading DATABASE_URL
+load_dotenv(BASE_DIR / ".env")
+
 PROJECT_DIR = BASE_DIR.parent
+ROOT_DIR = PROJECT_DIR.parent
 DATA_DIR = BASE_DIR / "data"
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
-DB_PATH = Path(DATABASE_URL or DATA_DIR / "hams.sqlite")
-STATIC_DIR = PROJECT_DIR / "dist"
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+
+# Force MySQL detection
 IS_MYSQL = DATABASE_URL.startswith(("mysql://", "mysql+pymysql://"))
+
+print("DATABASE_URL =", DATABASE_URL)
+print("IS_MYSQL =", IS_MYSQL)
+DB_PATH = Path(DATABASE_URL or DATA_DIR / "hams.sqlite")
+STATIC_DIR = Path(os.environ.get("STATIC_DIR", ROOT_DIR / "frontend" / "dist"))
+
 DB_INTEGRITY_ERROR = (sqlite3.IntegrityError,) + ((pymysql.err.IntegrityError,) if pymysql else ())
 DB_INIT_ERROR = None
 MYSQL_POOL = queue.LifoQueue(maxsize=int(os.environ.get("MYSQL_POOL_SIZE", "5")))
@@ -177,6 +191,8 @@ def decorate_meal_row(row):
     if row is None:
         return None
     meal = dict(row)
+    if "weekday" not in meal or not meal.get("weekday"):
+        meal["weekday"] = "Monday"
     if meal.get("type") in MEAL_WINDOWS:
         meal["status"] = meal_status_for_type(meal["type"])
         meal["windowLabel"] = MEAL_WINDOWS[meal["type"]]["label"]
@@ -520,6 +536,7 @@ def init_db():
 
             CREATE TABLE IF NOT EXISTS meals (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
+              weekday VARCHAR(20) NOT NULL DEFAULT 'Monday',
               type VARCHAR(255) NOT NULL,
               start_time VARCHAR(255) NOT NULL,
               end_time VARCHAR(255) NOT NULL,
@@ -739,22 +756,24 @@ def normalize_meal_schedule(conn):
     conn.execute("DELETE FROM meals WHERE LOWER(type) = 'lunch'")
     conn.execute("DELETE FROM kitchen_scan_logs WHERE LOWER(meal_type) = 'lunch'")
 
+    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     defaults = [
         ("Breakfast", "06:30 AM", "08:45 AM", "Pap, tea, bread, eggs, fruit", "Upcoming"),
         ("Dinner", "05:00 PM", "07:45 PM", "Rice, stew, protein, vegetables", "Upcoming"),
     ]
-    for meal_type, start_time, end_time, menu, status in defaults:
-        existing = conn.execute("SELECT id FROM meals WHERE type = ? LIMIT 1", (meal_type,)).fetchone()
-        if existing:
-            conn.execute(
-                "UPDATE meals SET start_time = ?, end_time = ?, status = ? WHERE id = ?",
-                (start_time, end_time, status, existing["id"]),
-            )
-        else:
-            conn.execute(
-                "INSERT INTO meals (type, start_time, end_time, menu, status) VALUES (?, ?, ?, ?, ?)",
-                (meal_type, start_time, end_time, menu, status),
-            )
+    for weekday in weekdays:
+        for meal_type, start_time, end_time, menu, status in defaults:
+            existing = conn.execute("SELECT id FROM meals WHERE weekday = ? AND type = ? LIMIT 1", (weekday, meal_type)).fetchone()
+            if existing:
+                conn.execute(
+                    "UPDATE meals SET start_time = ?, end_time = ?, status = ? WHERE id = ?",
+                    (start_time, end_time, status, existing["id"]),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO meals (weekday, type, start_time, end_time, menu, status) VALUES (?, ?, ?, ?, ?, ?)",
+                    (weekday, meal_type, start_time, end_time, menu, status),
+                )
     conn.commit()
 
 
@@ -1155,90 +1174,121 @@ def create_app():
     @app.get("/api/search")
     def global_search():
         query = request.args.get("q", "").strip()
-        if len(query) < 2:
+        if len(query) < 1:
             return jsonify({"students": [], "staff": [], "baskets": [], "meals": []})
 
         like_query = f"%{query}%"
         user = current_user()
         role = user.get("role")
 
+        # Search has intentionally been widened so users can find related records by
+        # name, matric/student ID, hostel, room, course, level, phone, basket code,
+        # status, weekday, meal type, menu, and time windows.
+        student_select = """
+            SELECT id, name, email, student_id AS studentId, hostel, room, gender, course, level, phone,
+                   photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
+            FROM users
+        """
+        student_match = """
+            (name LIKE ? OR email LIKE ? OR student_id LIKE ? OR hostel LIKE ? OR room LIKE ?
+             OR gender LIKE ? OR course LIKE ? OR level LIKE ? OR phone LIKE ? OR status LIKE ?)
+        """
+        student_params = (like_query, like_query, like_query, like_query, like_query, like_query, like_query, like_query, like_query, like_query)
+
         if role == "student":
             student_id = str(user.get("studentId") or "")
             students_rows = query_all(
-                """
-                SELECT id, name, email, student_id AS studentId, hostel, room, gender, course, level, phone,
-                       photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
-                FROM users
-                WHERE role = 'student' AND student_id = ? AND (name LIKE ? OR email LIKE ? OR student_id LIKE ? OR hostel LIKE ?)
+                f"""
+                {student_select}
+                WHERE role = 'student' AND student_id = ? AND {student_match}
                 ORDER BY name
-                LIMIT 1
+                LIMIT 3
                 """,
-                (student_id, like_query, like_query, like_query, like_query),
+                (student_id, *student_params),
             )
             baskets = query_all(
                 """
                 SELECT id, basket_code AS basketCode, student_id AS studentId, status,
                        clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
                 FROM laundry_baskets
-                WHERE student_id = ? AND (basket_code LIKE ? OR status LIKE ?)
+                WHERE student_id = ? AND (basket_code LIKE ? OR status LIKE ? OR received_at LIKE ? OR estimated_finish LIKE ? OR notes LIKE ?)
                 ORDER BY id DESC
                 LIMIT 8
                 """,
-                (student_id, like_query, like_query),
+                (student_id, like_query, like_query, like_query, like_query, like_query),
             )
             meals_rows = query_all(
                 """
-                SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status
+                SELECT id, weekday, type, start_time AS startTime, end_time AS endTime, menu, status
                 FROM meals
-                WHERE type LIKE ? OR menu LIKE ? OR status LIKE ?
+                WHERE weekday LIKE ? OR type LIKE ? OR start_time LIKE ? OR end_time LIKE ? OR menu LIKE ? OR status LIKE ?
                 ORDER BY id
-                LIMIT 8
+                LIMIT 10
                 """,
-                (like_query, like_query, like_query),
+                (like_query, like_query, like_query, like_query, like_query, like_query),
             )
             return jsonify({"students": [normalize_user_row(row) for row in students_rows], "staff": [], "baskets": baskets, "meals": [decorate_meal_row(row) for row in meals_rows]})
 
         students_rows = query_all(
-            """
-            SELECT id, name, email, student_id AS studentId, hostel, room, gender, course, level, phone,
-                   photo_url AS photoUrl, meal_subscribed AS mealSubscribed, laundry_subscribed AS laundrySubscribed, status
-            FROM users
-            WHERE role = 'student' AND (name LIKE ? OR email LIKE ? OR student_id LIKE ? OR hostel LIKE ?)
-            ORDER BY name
-            LIMIT 8
+            f"""
+            {student_select}
+            WHERE role = 'student' AND {student_match}
+            ORDER BY
+              CASE
+                WHEN student_id = ? THEN 0
+                WHEN name LIKE ? THEN 1
+                WHEN student_id LIKE ? THEN 2
+                ELSE 3
+              END,
+              name
+            LIMIT 12
             """,
-            (like_query, like_query, like_query, like_query),
+            (*student_params, query, like_query, like_query),
         )
         staff_rows = [] if role in ("kitchen", "laundry") else query_all(
             """
             SELECT id, name, email, role, status
             FROM users
-            WHERE role IN ('kitchen', 'laundry', 'admin') AND (name LIKE ? OR email LIKE ? OR role LIKE ?)
+            WHERE role IN ('kitchen', 'laundry', 'admin')
+              AND (name LIKE ? OR email LIKE ? OR role LIKE ? OR status LIKE ?)
             ORDER BY name
             LIMIT 8
             """,
-            (like_query, like_query, like_query),
+            (like_query, like_query, like_query, like_query),
         )
         baskets = [] if role == "kitchen" else query_all(
             """
             SELECT id, basket_code AS basketCode, student_id AS studentId, status,
                    clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
             FROM laundry_baskets
-            WHERE basket_code LIKE ? OR student_id LIKE ? OR status LIKE ?
-            ORDER BY id DESC
-            LIMIT 8
+            WHERE basket_code LIKE ? OR student_id LIKE ? OR status LIKE ? OR received_at LIKE ? OR estimated_finish LIKE ? OR notes LIKE ?
+            ORDER BY
+              CASE
+                WHEN basket_code = ? THEN 0
+                WHEN basket_code LIKE ? THEN 1
+                WHEN student_id LIKE ? THEN 2
+                ELSE 3
+              END,
+              id DESC
+            LIMIT 12
             """,
-            (like_query, like_query, like_query),
+            (like_query, like_query, like_query, like_query, like_query, like_query, query, like_query, like_query),
         )
         meals_rows = query_all(
             """
-            SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status
+            SELECT id, weekday, type, start_time AS startTime, end_time AS endTime, menu, status
             FROM meals
-            WHERE type LIKE ? OR menu LIKE ? OR status LIKE ?
-            ORDER BY id
-            LIMIT 8
+            WHERE weekday LIKE ? OR type LIKE ? OR start_time LIKE ? OR end_time LIKE ? OR menu LIKE ? OR status LIKE ?
+            ORDER BY
+              CASE
+                WHEN weekday LIKE ? THEN 0
+                WHEN type LIKE ? THEN 1
+                ELSE 2
+              END,
+              id
+            LIMIT 12
             """,
-            (like_query, like_query, like_query),
+            (like_query, like_query, like_query, like_query, like_query, like_query, like_query, like_query),
         )
         return jsonify({"students": [normalize_user_row(row) for row in students_rows], "staff": staff_rows, "baskets": baskets, "meals": [decorate_meal_row(row) for row in meals_rows]})
 
@@ -1247,6 +1297,7 @@ def create_app():
         payload = request.get_json(silent=True) or {}
         email = (payload.get("email") or "").strip()
         password = payload.get("password")
+        requested_role = (payload.get("role") or "").strip().lower()
 
         if not email or not password:
             return jsonify({"message": "Email and password are required."}), 400
@@ -1267,6 +1318,13 @@ def create_app():
                     log_action(conn, "unknown", "failed login", "user", email)
                     conn.commit()
                 return jsonify({"message": "Invalid login details."}), 401
+
+            actual_role = (user.get("role") or "").lower()
+            if requested_role and requested_role != actual_role:
+                with get_connection() as conn:
+                    log_action(conn, user["name"], f"blocked {requested_role} portal login for {actual_role} account", "user", str(user["id"]))
+                    conn.commit()
+                return jsonify({"message": f"This account is registered as {actual_role}. Please use the {actual_role} login card."}), 403
 
             user.pop("password", None)
             user = normalize_user_row(user)
@@ -1838,10 +1896,10 @@ def create_app():
             5,
             lambda: [decorate_meal_row(row) for row in query_all(
                 """
-                SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status
+                SELECT id, weekday, type, start_time AS startTime, end_time AS endTime, menu, status
                 FROM meals
                 WHERE type IN ('Breakfast', 'Dinner')
-                ORDER BY id
+                ORDER BY CASE weekday WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 WHEN 'Sunday' THEN 7 ELSE 8 END, id
                 """
             )],
         )
@@ -1857,18 +1915,21 @@ def create_app():
         meal_type = normalize_meal_type(payload["type"])
         if not meal_type:
             return jsonify({"message": "Only Breakfast and Dinner can be created. Lunch is not available."}), 400
+        weekday = payload.get("weekday", "Monday")
+        if weekday not in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]:
+            return jsonify({"message": "Weekday must be Monday to Sunday."}), 400
 
         with get_connection() as conn:
             cursor = conn.execute(
-                "INSERT INTO meals (type, start_time, end_time, menu, status) VALUES (?, ?, ?, ?, ?)",
-                (meal_type, payload["startTime"], payload["endTime"], payload["menu"], payload["status"]),
+                "INSERT INTO meals (weekday, type, start_time, end_time, menu, status) VALUES (?, ?, ?, ?, ?, ?)",
+                (weekday, meal_type, payload["startTime"], payload["endTime"], payload["menu"], payload["status"]),
             )
             log_action(conn, "admin", "created", "meal", meal_type)
             conn.commit()
             meal_id = cursor.lastrowid
 
         meal = decorate_meal_row(query_one(
-            "SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?",
+            "SELECT id, weekday, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?",
             (meal_id,),
         ))
         return jsonify(meal), 201
@@ -1884,15 +1945,18 @@ def create_app():
         meal_type = normalize_meal_type(payload["type"])
         if not meal_type:
             return jsonify({"message": "Only Breakfast and Dinner can be saved. Lunch is not available."}), 400
+        weekday = payload.get("weekday", "Monday")
+        if weekday not in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]:
+            return jsonify({"message": "Weekday must be Monday to Sunday."}), 400
 
         with get_connection() as conn:
             result = conn.execute(
                 """
                 UPDATE meals
-                SET type = ?, start_time = ?, end_time = ?, menu = ?, status = ?
+                SET weekday = ?, type = ?, start_time = ?, end_time = ?, menu = ?, status = ?
                 WHERE id = ?
                 """,
-                (meal_type, payload["startTime"], payload["endTime"], payload["menu"], payload["status"], meal_id),
+                (weekday, meal_type, payload["startTime"], payload["endTime"], payload["menu"], payload["status"], meal_id),
             )
             log_action(conn, "admin", "updated", "meal", meal_type)
             conn.commit()
@@ -1901,7 +1965,7 @@ def create_app():
             return jsonify({"message": "Meal not found."}), 404
 
         meal = decorate_meal_row(query_one(
-            "SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?",
+            "SELECT id, weekday, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?",
             (meal_id,),
         ))
         return jsonify(meal)
@@ -2767,10 +2831,10 @@ def create_app():
         def load_kitchen_dashboard():
             meals_rows = query_all(
                 """
-                SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status
+                SELECT id, weekday, type, start_time AS startTime, end_time AS endTime, menu, status
                 FROM meals
                 WHERE type IN ('Breakfast', 'Dinner')
-                ORDER BY id
+                ORDER BY CASE weekday WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 WHEN 'Sunday' THEN 7 ELSE 8 END, id
                 """
             )
             meals_today = [decorate_meal_row(row) for row in meals_rows]
@@ -2798,7 +2862,7 @@ def create_app():
 
         current_meal = query_one(
             """
-            SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status
+            SELECT id, weekday, type, start_time AS startTime, end_time AS endTime, menu, status
             FROM meals
             WHERE status = 'Active'
             ORDER BY id
@@ -2990,13 +3054,13 @@ def create_app():
             today = local_date_text()
             meals = query_all(
                 """
-                SELECT m.id, m.type, m.start_time AS startTime, m.end_time AS endTime, m.menu, m.status,
+                SELECT m.id, m.weekday, m.type, m.start_time AS startTime, m.end_time AS endTime, m.menu, m.status,
                        CASE WHEN ms.id IS NULL THEN 0 ELSE 1 END AS consumed,
                        ms.scanned_at AS scannedAt
                 FROM meals m
                 LEFT JOIN meal_scans ms ON ms.meal_id = m.id AND ms.student_id = ? AND ms.scan_date = ?
                 WHERE m.type IN ('Breakfast', 'Dinner')
-                ORDER BY m.id
+                ORDER BY CASE m.weekday WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 WHEN 'Sunday' THEN 7 ELSE 8 END, m.id
                 """,
                 (student_id, today),
             )
@@ -3070,7 +3134,7 @@ def create_app():
             return jsonify({"message": "Student ID and meal ID are required."}), 400
 
         late_reason = payload.get("lateReason", "").strip()
-        meal = decorate_meal_row(query_one("SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?", (meal_id,)))
+        meal = decorate_meal_row(query_one("SELECT id, weekday, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?", (meal_id,)))
         if meal is None:
             return jsonify({"message": "Meal not found."}), 404
         if meal["type"] not in ALLOWED_MEALS:
@@ -3174,7 +3238,7 @@ def create_app():
             if acting_user["role"] != "student" or str(acting_user.get("studentId") or "") != str(student_id):
                 return jsonify({"message": "You can only claim your own meal ticket."}), 403
 
-        meal = decorate_meal_row(query_one("SELECT id, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?", (meal_id,)))
+        meal = decorate_meal_row(query_one("SELECT id, weekday, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?", (meal_id,)))
         if meal is None:
             return jsonify({"message": "Meal not found."}), 404
         if meal["type"] not in ALLOWED_MEALS:

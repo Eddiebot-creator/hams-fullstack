@@ -2,14 +2,14 @@ import sqlite3
 import pymysql
 
 # SQLite connection
-sqlite_conn = sqlite3.connect("server/data/hams.sqlite")
+sqlite_conn = sqlite3.connect("data/hams.sqlite")
 sqlite_cursor = sqlite_conn.cursor()
 
 # MySQL connection
 mysql_conn = pymysql.connect(
     host="localhost",
     user="root",
-    password="Godfirst246@#",
+    password="iambatman301",
     database="hams"
 )
 
