@@ -1,7 +1,7 @@
 {
-  "name": "HMAS",
-  "short_name": "HMAS",
-  "description": "Effectienct system",
+  "name": "HAMS",
+  "short_name": "HAMS",
+  "description": "Hostel Add-on Management System",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

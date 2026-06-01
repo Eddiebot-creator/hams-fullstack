@@ -6,6 +6,7 @@ import { Input } from "@/src/components/ui/input";
 import { api, type LaundryBasket, type Student } from "@/src/lib/api";
 import { showToast } from "@/src/components/ui/toast";
 import CameraQrScanner from "@/src/components/scanner/CameraQrScanner";
+import { enqueueOfflineAction } from "@/src/lib/offlineQueue";
 
 const maxClothesCount = 30;
 
@@ -58,16 +59,18 @@ export default function LaundryScanner() {
     const storedUser = JSON.parse(localStorage.getItem("hamsUser") || "{}");
     setIsSaving(true);
     setBasket(null);
+    const scanPayload = {
+      action: actionType,
+      basketCode: basketCode.trim(),
+      studentId: studentId.trim(),
+      clothesCount: Math.min(maxClothesCount, Math.max(1, Number(clothesCount) || 1)),
+      qrPayload: lastQrPayload || undefined,
+      staffName: storedUser.name || "Laundry Staff",
+      clientScannedAt: new Date().toISOString(),
+    };
 
     try {
-      const result = await api.scanLaundry({
-        action: actionType,
-        basketCode: basketCode.trim(),
-        studentId: studentId.trim(),
-        clothesCount: Math.min(maxClothesCount, Math.max(1, Number(clothesCount) || 1)),
-        qrPayload: lastQrPayload || undefined,
-        staffName: storedUser.name || "Laundry Staff",
-      });
+      const result = await api.scanLaundry(scanPayload);
       setBasket(result.basket);
       setStudent(result.student);
       setMessage(result.message);
@@ -75,8 +78,17 @@ export default function LaundryScanner() {
       navigator.vibrate?.(80);
       showToast(result.message);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Unable to save laundry scan.");
-      setScanStatus("error");
+      const errorMessage = err instanceof Error ? err.message : "Unable to save laundry scan.";
+      const shouldQueue = !navigator.onLine || errorMessage.includes("Unable to reach") || errorMessage.includes("taking too long") || errorMessage.includes("timed out");
+      if (shouldQueue) {
+        await enqueueOfflineAction("laundry-scan", scanPayload);
+        setMessage("Network is unavailable. Laundry scan saved and will sync automatically.");
+        setScanStatus("success");
+        showToast("Laundry scan saved offline.");
+      } else {
+        setMessage(errorMessage);
+        setScanStatus("error");
+      }
       navigator.vibrate?.([80, 60, 80]);
     } finally {
       setIsSaving(false);

@@ -7,7 +7,7 @@ import { PasswordInput } from "@/src/components/ui/password-input";
 import { Label } from "@/src/components/ui/label";
 import { showToast } from "@/src/components/ui/toast";
 import { ArrowRight, Lock, Mail, ShieldAlert, Shirt, User, UtensilsCrossed } from "lucide-react";
-import { api, type Role } from "@/src/lib/api";
+import { api, clearApiCache, type Role } from "@/src/lib/api";
 
 const roleOptions: Array<{ role: Role; label: string; description: string; icon: typeof User }> = [
   { role: "student", label: "Student", description: "Meals, QR code, profile, and laundry status", icon: User },
@@ -43,14 +43,17 @@ export default function Login() {
     setIsLoading(true);
     setError("");
     try {
+      clearApiCache();
       const { user, token } = await api.login({ email, password, role: selectedRole });
       localStorage.setItem("hamsUser", JSON.stringify(user));
       localStorage.setItem("hamsToken", token);
       if (user.role !== selectedRole) {
         localStorage.removeItem("hamsUser");
         localStorage.removeItem("hamsToken");
+        clearApiCache();
         throw new Error(`This account is registered as ${user.role}. Please use the ${user.role} login card.`);
       }
+      clearApiCache();
       showToast(`Welcome, ${user.name}.`);
       navigate(destinations[user.role]);
     } catch (err) {
@@ -96,7 +99,7 @@ export default function Login() {
                     <p className="text-lg font-black text-neutral-950">{option.label}</p>
                   </div>
                   <p className="text-sm text-neutral-500">{option.description}</p>
-                  <p className="mt-3 text-xs font-bold text-indigo-600">Tap to sign in →</p>
+                  <p className="mt-3 text-xs font-bold text-indigo-600">Tap to sign in -&gt;</p>
                 </motion.button>
               );
             })}
@@ -117,7 +120,7 @@ export default function Login() {
           <div className="p-6 sm:p-8 border-b border-neutral-100">
             <button onClick={() => setSelectedRole(null)}
               className="text-sm text-neutral-500 hover:text-neutral-700 mb-4 flex items-center gap-1">
-              ← Back to roles
+              &lt;- Back to roles
             </button>
             <div className="flex items-center gap-3">
               <div className={`w-11 h-11 rounded-xl flex items-center justify-center border-2 ${roleColors[selectedRole]}`}>

@@ -1,73 +1,73 @@
-# HAMS Web App - Arranged Frontend and Backend
+# HAMS Web App
 
-This project has been reorganized into a clean structure:
+HAMS is a full-stack Hostel Add-on Management System with a React/Vite frontend, Flask backend, and MySQL database support.
+
+## Project Structure
 
 ```text
-hams-web-arranged/
-  frontend/        React + Vite frontend
-  backend/         Flask backend API and database files
-  docs/            Documentation and fix notes
-  render.yaml      Render deployment config
-  package.json     Root helper scripts
+myadds-main/
+  src/                 React frontend pages, components, and API client
+  public/              Logo, manifest, and service worker
+  server/              Flask backend API
+  scripts/             Database migration helpers
+  package.json         Frontend scripts and dependencies
+  requirements.txt     Python backend dependencies
+  render.yaml          Render deployment blueprint
 ```
 
-## Run locally
+## Run Locally
 
-Open two VS Code terminals.
+Open two VS Code terminals from this project folder.
 
 ### Terminal 1 - Backend
 
 ```powershell
-cd "YOUR_PROJECT_FOLDER"
-pip install -r backend/requirements.txt
-python backend/server/app.py
+pip install -r requirements.txt
+python server/app.py
 ```
 
-The backend runs on:
+Backend:
 
 ```text
 http://localhost:4000
 ```
 
+Health check:
+
+```text
+http://localhost:4000/api/health
+```
+
 ### Terminal 2 - Frontend
 
 ```powershell
-cd "YOUR_PROJECT_FOLDER"
-npm install --prefix frontend
-npm run dev --prefix frontend
+npm install
+npm run dev
 ```
 
-The frontend runs on:
+Frontend:
 
 ```text
 http://localhost:3000
 ```
 
-## Build frontend
+## Build
 
 ```powershell
-npm run build --prefix frontend
+npm run build
 ```
 
-## GitHub push
+## Deploy
 
-After copying these files into your GitHub repo:
+Push the repo to GitHub, then deploy on Render with Blueprint. Render reads `render.yaml`, installs Python and Node dependencies, builds the frontend, and starts Flask with Gunicorn.
 
-```powershell
-git status
-git add .
-git commit -m "Arrange frontend backend and apply HAMS fixes"
-git push origin main
-```
+Set `DATABASE_URL` on Render to your MySQL connection string.
 
-## Important files
+## Key Files
 
-- Frontend pages: `frontend/src/pages`
-- Frontend API connection: `frontend/src/lib/api.ts`
-- Backend API: `backend/server/app.py`
-- Database files: `backend/server/data`
-- Fix notes: `docs/FIXES_APPLIED.md`
+- Frontend API client: `src/lib/api.ts`
+- Offline queue: `src/lib/offlineQueue.ts`
+- Offline sync: `src/lib/offlineSync.ts`
+- Backend API: `server/app.py`
+- Deployment config: `render.yaml`
 
-## Arrangement note
-
-The frontend `package.json` has been cleaned so backend-only Node packages are no longer installed in the frontend folder. The Flask backend uses `backend/requirements.txt`.

@@ -56,7 +56,7 @@ TOKEN_TTL_SECONDS = int(os.environ.get("TOKEN_TTL_SECONDS", "86400"))
 APP_TIMEZONE = ZoneInfo(os.environ.get("APP_TIMEZONE", "Africa/Lagos"))
 
 MEAL_WINDOWS = {
-    "Breakfast": {"start": "9:30", "end": "14:45", "label": "9:30 AM - 2:45 PM"},
+    "Breakfast": {"start": "06:30", "end": "08:45", "label": "6:30 AM - 8:45 AM"},
     "Dinner": {"start": "17:00", "end": "19:45", "label": "5:00 PM - 7:45 PM"},
 }
 ALLOWED_MEALS = tuple(MEAL_WINDOWS.keys())
@@ -81,32 +81,50 @@ def local_time_label():
     return local_now().strftime("%I:%M %p")
 
 
-def minutes_from_hhmm(value):
-    hours, minutes = [int(part) for part in value.split(":")]
-    return hours * 60 + minutes
+def minutes_from_time(value):
+    text = str(value or "").strip().upper().replace(".", "")
+    if not text:
+        return None
+    if text.endswith(("AM", "PM")) and not text[-3].isspace():
+        text = f"{text[:-2].strip()} {text[-2:]}"
+    for fmt in ("%H:%M", "%I:%M %p", "%I %p"):
+        try:
+            parsed = datetime.strptime(text, fmt)
+            return parsed.hour * 60 + parsed.minute
+        except ValueError:
+            continue
+    return None
+
+
+def format_time_label(value):
+    minutes = minutes_from_time(value)
+    if minutes is None:
+        return str(value or "").strip()
+    hour = minutes // 60
+    minute = minutes % 60
+    suffix = "AM" if hour < 12 else "PM"
+    hour_12 = hour % 12 or 12
+    return f"{hour_12}:{minute:02d} {suffix}"
+
+
+def window_label(start, end):
+    return f"{format_time_label(start)} - {format_time_label(end)}"
 
 
 def meal_status_for_type(meal_type, now=None):
     window = MEAL_WINDOWS.get(meal_type)
     if not window:
         return "Unavailable"
-
-    current = now or local_now()
-    current_minutes = current.hour * 60 + current.minute
-    start = minutes_from_hhmm(window["start"])
-    end = minutes_from_hhmm(window["end"])
-    if start <= current_minutes <= end:
-        return "Active"
-    if current_minutes < start:
-        return "Upcoming"
-    return "Completed"
+    return time_window_status(window, now)
 
 
 def time_window_status(window, now=None):
     current = now or local_now()
     current_minutes = current.hour * 60 + current.minute
-    start = minutes_from_hhmm(window["start"])
-    end = minutes_from_hhmm(window["end"])
+    start = minutes_from_time(window.get("start"))
+    end = minutes_from_time(window.get("end"))
+    if start is None or end is None:
+        return "Unavailable"
     if start <= current_minutes <= end:
         return "Active"
     if current_minutes < start:
@@ -116,6 +134,33 @@ def time_window_status(window, now=None):
 
 def laundry_drop_status(now=None):
     return time_window_status(LAUNDRY_DROP_WINDOW, now)
+
+
+def laundry_drop_label():
+    return window_label(LAUNDRY_DROP_WINDOW["start"], LAUNDRY_DROP_WINDOW["end"])
+
+
+def service_windows_payload(now=None):
+    current = now or local_now()
+    return {
+        "meals": {
+            meal_type: {
+                "start": window["start"],
+                "end": window["end"],
+                "label": window_label(window["start"], window["end"]),
+                "status": time_window_status(window, current),
+            }
+            for meal_type, window in MEAL_WINDOWS.items()
+        },
+        "laundry": {
+            "start": LAUNDRY_DROP_WINDOW["start"],
+            "end": LAUNDRY_DROP_WINDOW["end"],
+            "label": laundry_drop_label(),
+            "status": laundry_drop_status(current),
+        },
+        "laundryMaxClothes": LAUNDRY_MAX_CLOTHES,
+        "laundryReturnHours": LAUNDRY_RETURN_HOURS,
+    }
 
 
 def parse_clothes_count(value):
@@ -156,6 +201,18 @@ def parse_record_datetime(value):
     return None
 
 
+def parse_client_scan_time(value):
+    if not value:
+        return local_now()
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return local_now()
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(APP_TIMEZONE)
+
+
 def current_laundry_week_range(now=None):
     current = now or local_now()
     week_start = current.date() - timedelta(days=current.weekday())
@@ -187,15 +244,27 @@ def weekly_laundry_drop(student_id, exclude_basket_code=None):
     return None
 
 
-def decorate_meal_row(row):
+def meal_window_from_row(meal):
+    meal_type = meal.get("type")
+    fallback = MEAL_WINDOWS.get(meal_type)
+    start = meal.get("startTime") or meal.get("start_time") or (fallback or {}).get("start")
+    end = meal.get("endTime") or meal.get("end_time") or (fallback or {}).get("end")
+    if not start or not end:
+        return None
+    return {"start": start, "end": end, "label": window_label(start, end)}
+
+
+def decorate_meal_row(row, now=None):
     if row is None:
         return None
     meal = dict(row)
     if "weekday" not in meal or not meal.get("weekday"):
         meal["weekday"] = "Monday"
     if meal.get("type") in MEAL_WINDOWS:
-        meal["status"] = meal_status_for_type(meal["type"])
-        meal["windowLabel"] = MEAL_WINDOWS[meal["type"]]["label"]
+        window = meal_window_from_row(meal)
+        if window:
+            meal["status"] = time_window_status(window, now)
+            meal["windowLabel"] = window["label"]
     return meal
 
 
@@ -218,6 +287,21 @@ def parse_student_id_from_scan(value):
     if raw.startswith("HAMS-STUDENT:"):
         return raw.replace("HAMS-STUDENT:", "", 1).strip()
     return raw
+
+
+def parse_meal_qr_payload(value):
+    raw = (value or "").strip()
+    if not raw.startswith("HAMS-MEAL:"):
+        return None
+    parts = raw.split(":")
+    if len(parts) < 5:
+        return None
+    return {
+        "mealType": parts[1].strip(),
+        "studentId": parts[2].strip(),
+        "serviceDate": parts[3].strip(),
+        "nonce": parts[4].strip(),
+    }
 
 
 def is_password_hash(value):
@@ -757,9 +841,19 @@ def normalize_meal_schedule(conn):
     conn.execute("DELETE FROM kitchen_scan_logs WHERE LOWER(meal_type) = 'lunch'")
 
     weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    menus = {
+        "Breakfast": "Pap, tea, bread, eggs, fruit",
+        "Dinner": "Rice, stew, protein, vegetables",
+    }
     defaults = [
-        ("Breakfast", "06:30 AM", "08:45 AM", "Pap, tea, bread, eggs, fruit", "Upcoming"),
-        ("Dinner", "05:00 PM", "07:45 PM", "Rice, stew, protein, vegetables", "Upcoming"),
+        (
+            meal_type,
+            format_time_label(window["start"]),
+            format_time_label(window["end"]),
+            menus.get(meal_type, ""),
+            "Upcoming",
+        )
+        for meal_type, window in MEAL_WINDOWS.items()
     ]
     for weekday in weekdays:
         for meal_type, start_time, end_time, menu, status in defaults:
@@ -823,8 +917,8 @@ def seed_db(conn):
         conn.executemany(
             "INSERT INTO meals (type, start_time, end_time, menu, status) VALUES (?, ?, ?, ?, ?)",
             [
-                ("Breakfast", "06:30 AM", "08:45 AM", "Pap, tea, bread, eggs, fruit", "Upcoming"),
-                ("Dinner", "05:00 PM", "07:45 PM", "Rice, stew, protein, vegetables", "Upcoming"),
+                ("Breakfast", format_time_label(MEAL_WINDOWS["Breakfast"]["start"]), format_time_label(MEAL_WINDOWS["Breakfast"]["end"]), "Pap, tea, bread, eggs, fruit", "Upcoming"),
+                ("Dinner", format_time_label(MEAL_WINDOWS["Dinner"]["start"]), format_time_label(MEAL_WINDOWS["Dinner"]["end"]), "Rice, stew, protein, vegetables", "Upcoming"),
             ],
         )
 
@@ -1170,6 +1264,10 @@ def create_app():
         if DB_INIT_ERROR:
             return jsonify({"ok": False, "database": "mysql" if IS_MYSQL else "sqlite", "message": DB_INIT_ERROR}), 500
         return jsonify({"ok": True, "database": "mysql" if IS_MYSQL else "sqlite", "summary": database_counts()})
+
+    @app.get("/api/config/service-windows")
+    def service_windows():
+        return jsonify(service_windows_payload())
 
     @app.get("/api/search")
     def global_search():
@@ -2238,7 +2336,7 @@ def create_app():
         if not bool(student.get("laundrySubscribed", 1)):
             return jsonify({"message": f"{student['name']} is not subscribed to laundry service."}), 403
         if laundry_drop_status() != "Active":
-            return jsonify({"message": f"Laundry drop-off QR opens from {LAUNDRY_DROP_WINDOW['label']}."}), 400
+            return jsonify({"message": f"Laundry drop-off QR opens from {laundry_drop_label()}."}), 400
 
         existing_week = weekly_laundry_drop(student_id)
         if existing_week is not None:
@@ -2284,6 +2382,7 @@ def create_app():
     @app.post("/api/laundry/scan")
     def scan_laundry():
         payload = request.get_json(silent=True) or {}
+        scan_time = parse_client_scan_time(payload.get("clientScannedAt"))
         action = payload.get("action")
         basket_code = (payload.get("basketCode") or "").strip()
         scanned_value = payload.get("qrPayload") or payload.get("studentId") or ""
@@ -2345,12 +2444,12 @@ def create_app():
                 conn.execute("UPDATE laundry_baskets SET status = ? WHERE id = ?", (status, existing["id"]))
                 basket_id = existing["id"]
             else:
-                if laundry_drop_status() != "Active":
-                    return jsonify({"message": f"Laundry drop-off scans are open from {LAUNDRY_DROP_WINDOW['label']}."}), 400
+                if laundry_drop_status(scan_time) != "Active":
+                    return jsonify({"message": f"Laundry drop-off scans are open from {laundry_drop_label()}."}), 400
                 status = "Pending"
                 activity = "Received by Scanner"
-                received_at = utc_now_text()
-                estimated_finish = payload.get("estimatedFinish") or (datetime.now(timezone.utc) + timedelta(hours=LAUNDRY_RETURN_HOURS)).replace(microsecond=0).isoformat()
+                received_at = scan_time.astimezone(timezone.utc).replace(microsecond=0).isoformat()
+                estimated_finish = payload.get("estimatedFinish") or (scan_time.astimezone(timezone.utc) + timedelta(hours=LAUNDRY_RETURN_HOURS)).replace(microsecond=0).isoformat()
                 if existing is None:
                     existing_week = weekly_laundry_drop(student_id)
                     if existing_week is not None:
@@ -2376,7 +2475,7 @@ def create_app():
 
             conn.execute(
                 "INSERT INTO laundry_activity (basket_code, action, staff_name, activity_time) VALUES (?, ?, ?, ?)",
-                (basket_code, activity, staff_name, utc_now_text()),
+                (basket_code, activity, staff_name, scan_time.astimezone(timezone.utc).replace(microsecond=0).isoformat()),
             )
             create_notification(conn, "student", "Laundry scan saved", f"Basket #{basket_code} was {activity.lower()}.", student_id)
             log_action(conn, staff_name, activity.lower(), "basket", basket_code)
@@ -3052,6 +3151,7 @@ def create_app():
 
             student = normalize_user_row(student)
             today = local_date_text()
+            weekday = local_now().strftime("%A")
             meals = query_all(
                 """
                 SELECT m.id, m.weekday, m.type, m.start_time AS startTime, m.end_time AS endTime, m.menu, m.status,
@@ -3059,10 +3159,10 @@ def create_app():
                        ms.scanned_at AS scannedAt
                 FROM meals m
                 LEFT JOIN meal_scans ms ON ms.meal_id = m.id AND ms.student_id = ? AND ms.scan_date = ?
-                WHERE m.type IN ('Breakfast', 'Dinner')
+                WHERE m.type IN ('Breakfast', 'Dinner') AND (m.weekday = ? OR m.weekday IS NULL OR m.weekday = '')
                 ORDER BY CASE m.weekday WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 WHEN 'Sunday' THEN 7 ELSE 8 END, m.id
                 """,
-                (student_id, today),
+                (student_id, today, weekday),
             )
 
             laundry = query_all(
@@ -3088,57 +3188,31 @@ def create_app():
             return jsonify({"message": "Student not found."}), 404
         return jsonify(value)
 
-        student = query_one(
-            """
-            SELECT id, name, email, student_id AS studentId, hostel, room, course, level, phone, photo_url AS photoUrl, status
-            FROM users
-            WHERE role = 'student' AND student_id = ?
-            """,
-            (student_id,),
-        )
-
-        if student is None:
-            return jsonify({"message": "Student not found."}), 404
-
-        meals = query_all(
-            """
-            SELECT m.id, m.type, m.start_time AS startTime, m.end_time AS endTime, m.menu, m.status,
-                   CASE WHEN ms.id IS NULL THEN 0 ELSE 1 END AS consumed,
-                   ms.scanned_at AS scannedAt
-            FROM meals m
-            LEFT JOIN meal_scans ms ON ms.meal_id = m.id AND ms.student_id = ?
-            ORDER BY m.id
-            """,
-            (student_id,),
-        )
-
-        laundry = query_all(
-            """
-            SELECT id, basket_code AS basketCode, student_id AS studentId, status,
-                   clothes_count AS clothesCount, received_at AS receivedAt, estimated_finish AS estimatedFinish, notes
-            FROM laundry_baskets
-            WHERE student_id = ?
-            ORDER BY id DESC
-            """,
-            (student_id,),
-        )
-
-        return jsonify({"student": student, "meals": meals, "laundry": laundry})
-
     @app.post("/api/meals/<int:meal_id>/scan")
     def scan_meal(meal_id):
         payload = request.get_json(silent=True) or {}
-        student_id = parse_student_id_from_scan(payload.get("studentId") or payload.get("qrPayload") or "")
+        scan_time = parse_client_scan_time(payload.get("clientScannedAt"))
+        qr_payload_text = payload.get("qrPayload") or ""
+        qr_payload = parse_meal_qr_payload(qr_payload_text)
+        student_id = parse_student_id_from_scan(payload.get("studentId") or qr_payload_text or "")
 
         if not student_id:
             return jsonify({"message": "Student ID and meal ID are required."}), 400
 
         late_reason = payload.get("lateReason", "").strip()
-        meal = decorate_meal_row(query_one("SELECT id, weekday, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?", (meal_id,)))
+        meal = decorate_meal_row(query_one("SELECT id, weekday, type, start_time AS startTime, end_time AS endTime, menu, status FROM meals WHERE id = ?", (meal_id,)), scan_time)
         if meal is None:
             return jsonify({"message": "Meal not found."}), 404
         if meal["type"] not in ALLOWED_MEALS:
             return jsonify({"message": "Only Breakfast and Dinner scanning is available."}), 400
+        today = scan_time.date().isoformat()
+        if qr_payload:
+            if qr_payload["studentId"] != student_id:
+                return jsonify({"message": "QR code student does not match the selected student."}), 400
+            if qr_payload["mealType"].lower() != meal["type"].lower():
+                return jsonify({"message": f"This QR code is for {qr_payload['mealType']}, not {meal['type']}."}), 400
+            if qr_payload["serviceDate"] != today:
+                return jsonify({"message": "This QR code is not for today's service date."}), 400
         if meal["status"] != "Active" and not late_reason:
             return jsonify({"message": f"{meal['type']} is not currently active. Add a late/override reason to approve."}), 400
         student = query_one(
@@ -3160,7 +3234,7 @@ def create_app():
                     INSERT INTO kitchen_scan_logs (student_id, meal_type, scanned_time, status)
                     VALUES (?, ?, ?, ?)
                     """,
-                    (student_id, meal["type"], local_time_label(), "Denied (Inactive Student)"),
+                    (student_id, meal["type"], scan_time.strftime("%I:%M %p"), "Denied (Inactive Student)"),
                 )
                 log_action(conn, "kitchen", "denied inactive student", "meal", f"{student_id}:{meal['type']}")
                 conn.commit()
@@ -3172,13 +3246,12 @@ def create_app():
                     INSERT INTO kitchen_scan_logs (student_id, meal_type, scanned_time, status)
                     VALUES (?, ?, ?, ?)
                     """,
-                    (student_id, meal["type"], local_time_label(), "Denied (Meal Unsubscribed)"),
+                    (student_id, meal["type"], scan_time.strftime("%I:%M %p"), "Denied (Meal Unsubscribed)"),
                 )
                 log_action(conn, "kitchen", "denied unsubscribed student", "meal", f"{student_id}:{meal['type']}")
                 conn.commit()
             return jsonify({"message": f"{student['name']} is not subscribed to meals."}), 403
 
-        today = local_date_text()
         existing = query_one("SELECT id FROM meal_scans WHERE student_id = ? AND meal_id = ? AND scan_date = ?", (student_id, meal_id, today))
         if existing is not None:
             with get_connection() as conn:
@@ -3187,13 +3260,13 @@ def create_app():
                     INSERT INTO kitchen_scan_logs (student_id, meal_type, scanned_time, status)
                     VALUES (?, ?, ?, ?)
                     """,
-                    (student_id, meal["type"], local_time_label(), "Denied (Already Scanned)"),
+                    (student_id, meal["type"], scan_time.strftime("%I:%M %p"), "Denied (Already Scanned)"),
                 )
                 log_action(conn, "kitchen", "denied duplicate scan", "meal", f"{student_id}:{meal['type']}")
                 conn.commit()
             return jsonify({"message": f"Already scanned for today's {meal['type']}."}), 409
 
-        scanned_at = utc_now_text()
+        scanned_at = scan_time.astimezone(timezone.utc).replace(microsecond=0).isoformat()
         ticket_code = f"HAMS-{meal['type'][:3].upper()}-{student_id}-{today.replace('-', '')}"
         with get_connection() as conn:
             conn.execute("INSERT INTO meal_scans (student_id, meal_id, scan_date, scanned_at) VALUES (?, ?, ?, ?)", (student_id, meal_id, today, scanned_at))
@@ -3202,7 +3275,7 @@ def create_app():
                 INSERT INTO kitchen_scan_logs (student_id, meal_type, scanned_time, status)
                 VALUES (?, ?, ?, ?)
                 """,
-                (student_id, meal["type"], local_time_label(), "Success"),
+                (student_id, meal["type"], scan_time.strftime("%I:%M %p"), "Success"),
             )
             create_notification(conn, "student", "Meal approved", f"Your {meal['type']} scan was approved.", student_id)
             action = "approved scan" if meal["status"] == "Active" else f"approved override scan: {late_reason}"

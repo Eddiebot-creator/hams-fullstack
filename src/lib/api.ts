@@ -10,6 +10,21 @@ type ApiRequestOptions = RequestInit & {
 
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
+export function clearApiCache() {
+  cache.clear();
+  pending.clear();
+}
+
+function currentCacheScope() {
+  try {
+    const token = localStorage.getItem("hamsToken") || "guest";
+    const user = JSON.parse(localStorage.getItem("hamsUser") || "{}");
+    return `${user?.id ?? "guest"}:${user?.role ?? "none"}:${user?.studentId ?? ""}:${token}`;
+  } catch {
+    return `guest:${localStorage.getItem("hamsToken") || ""}`;
+  }
+}
+
 function friendlyNetworkError(error: unknown) {
   if (error instanceof DOMException && error.name === "AbortError") {
     return new Error("The server is taking too long to respond. Please wait a moment and try again.");
@@ -63,6 +78,7 @@ async function fetchJson<T>(path: string, options: RequestInit, retries: number,
         if (response.status === 401 && !path.startsWith("/auth/")) {
           localStorage.removeItem("hamsToken");
           localStorage.removeItem("hamsUser");
+          clearApiCache();
           window.dispatchEvent(new CustomEvent("hams-session-expired"));
         }
         throw new Error(message);
@@ -84,7 +100,7 @@ async function fetchJson<T>(path: string, options: RequestInit, retries: number,
 async function request<T>(path: string, options?: ApiRequestOptions): Promise<T> {
   const { cacheMs = 0, retry, timeoutMs = 12000, ...fetchOptions } = options ?? {};
   const method = fetchOptions.method ?? "GET";
-  const cacheKey = `${method}:${path}`;
+  const cacheKey = `${currentCacheScope()}:${method}:${path}`;
   const requestRetries = retry ?? (method === "GET" ? 1 : 0);
 
   if (method !== "GET") {
@@ -394,6 +410,20 @@ export type DatabaseHealth = {
 
 export type DatabaseSummary = Record<string, number>;
 
+export type ServiceWindow = {
+  start: string;
+  end: string;
+  label: string;
+  status: "Active" | "Upcoming" | "Completed" | "Unavailable";
+};
+
+export type ServiceWindows = {
+  meals: Record<string, ServiceWindow>;
+  laundry: ServiceWindow;
+  laundryMaxClothes: number;
+  laundryReturnHours: number;
+};
+
 export const api = {
   login: (payload: { email: string; password: string; role?: Role | null }) =>
     request<{ user: Student & { role: Role }; token: string }>("/auth/login", {
@@ -412,6 +442,7 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   globalSearch: (query: string) => request<GlobalSearchResults>(`/search?q=${encodeURIComponent(query.trim())}`, { cacheMs: 1200 }),
+  serviceWindows: () => request<ServiceWindows>("/config/service-windows", { cacheMs: 5000 }),
   students: () => request<Student[]>("/students", { cacheMs: 15000 }),
   studentsPage: (params: { page: number; pageSize?: number; search?: string; status?: string }) =>
     request<Paginated<Student>>(`/students?page=${params.page}&pageSize=${params.pageSize ?? 20}&search=${encodeURIComponent(params.search ?? "")}&status=${encodeURIComponent(params.status ?? "All")}`, { cacheMs: 8000 }),
@@ -501,7 +532,7 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
-  scanLaundry: (payload: { action: "receive" | "return"; basketCode: string; studentId: string; clothesCount?: number; qrPayload?: string; staffName?: string }) =>
+  scanLaundry: (payload: { action: "receive" | "return"; basketCode: string; studentId: string; clothesCount?: number; qrPayload?: string; staffName?: string; clientScannedAt?: string }) =>
     request<{ message: string; basket: LaundryBasket; student: Student }>("/laundry/scan", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -566,10 +597,10 @@ export const api = {
   adminAnalytics: () => request<AdminAnalytics>("/admin/analytics", { cacheMs: 20000 }),
   exportUrl: (kind: "students" | "meals" | "baskets" | "audits") => `${API_BASE_URL}/export/${kind}`,
   studentOverview: (studentId: string) => request<StudentOverview>(`/student/${studentId}/overview`, { cacheMs: 8000 }),
-  scanMeal: (mealId: number, studentId: string, lateReason?: string, qrPayload?: string) =>
+  scanMeal: (mealId: number, studentId: string, lateReason?: string, qrPayload?: string, clientScannedAt?: string) =>
     request<{ message: string; studentId: string; meal: Meal; student: Student; ticket: MealTicket }>(`/meals/${mealId}/scan`, {
       method: "POST",
-      body: JSON.stringify({ studentId, lateReason, qrPayload }),
+      body: JSON.stringify({ studentId, lateReason, qrPayload, clientScannedAt }),
     }),
   claimMeal: (studentId: string, mealId: number) =>
     request<{ message: string; studentId: string; meal: Meal; student: Student; ticket: MealTicket }>(`/student/${studentId}/claim-meal`, {

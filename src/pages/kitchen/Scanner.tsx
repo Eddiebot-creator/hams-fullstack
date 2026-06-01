@@ -6,6 +6,8 @@ import { Input } from "@/src/components/ui/input";
 import { SelectMenu } from "@/src/components/ui/select-menu";
 import { api, type Meal, type MealTicket, type Student } from "@/src/lib/api";
 import CameraQrScanner from "@/src/components/scanner/CameraQrScanner";
+import { enqueueOfflineAction } from "@/src/lib/offlineQueue";
+import { showToast } from "@/src/components/ui/toast";
 
 export default function KitchenScanner() {
   const [scanStatus, setScanStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -37,16 +39,32 @@ export default function KitchenScanner() {
     setIsScanning(true);
     setStudent(null);
     setTicket(null);
+    const clientScannedAt = new Date().toISOString();
     try {
-      const result = await api.scanMeal(scanMealId, cleanId, lateReason.trim() || undefined, rawPayload);
+      const result = await api.scanMeal(scanMealId, cleanId, lateReason.trim() || undefined, rawPayload, clientScannedAt);
       setStudent(result.student);
       setTicket(result.ticket);
       setScanMessage(`${result.meal.type} approved for Student ID: ${result.studentId}`);
       setScanStatus("success");
       navigator.vibrate?.(80);
     } catch (err) {
-      setScanMessage(err instanceof Error ? err.message : "Scan denied.");
-      setScanStatus("error");
+      const message = err instanceof Error ? err.message : "Scan denied.";
+      const shouldQueue = !navigator.onLine || message.includes("Unable to reach") || message.includes("taking too long") || message.includes("timed out");
+      if (shouldQueue) {
+        await enqueueOfflineAction("meal-scan", {
+          mealId: scanMealId,
+          studentId: cleanId,
+          lateReason: lateReason.trim() || undefined,
+          qrPayload: rawPayload || undefined,
+          clientScannedAt,
+        });
+        setScanMessage("Network is unavailable. Meal scan saved and will sync automatically.");
+        setScanStatus("success");
+        showToast("Meal scan saved offline.");
+      } else {
+        setScanMessage(message);
+        setScanStatus("error");
+      }
       navigator.vibrate?.([80, 60, 80]);
     } finally {
       setIsScanning(false);

@@ -178,7 +178,7 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
                     icon={UtensilsCrossed}
                     items={results.meals.map((meal) => ({
                       label: `${meal.weekday ?? ""} ${meal.type} - ${meal.status}`.trim(),
-                      detail: `${meal.startTime ?? ""}${meal.endTime ? ` - ${meal.endTime}` : ""}${meal.menu ? ` • ${meal.menu}` : ""}`,
+                      detail: `${meal.startTime ?? ""}${meal.endTime ? ` - ${meal.endTime}` : ""}${meal.menu ? ` - ${meal.menu}` : ""}`,
                       onClick: () => closeAndGo(currentRole === "admin" ? "/admin/meals" : roleHome[currentRole ?? "student"]),
                     }))}
                   />

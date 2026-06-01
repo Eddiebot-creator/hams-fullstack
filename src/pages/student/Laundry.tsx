@@ -3,23 +3,12 @@ import { motion } from "motion/react";
 import { AlertCircle, CheckCircle2, Clock3, QrCode, ScanLine, Shirt } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
-import { api, type LaundryBasket, type StudentOverview } from "@/src/lib/api";
+import { api, type LaundryBasket, type ServiceWindows, type StudentOverview } from "@/src/lib/api";
 import { showToast } from "@/src/components/ui/toast";
 
 const timelineSteps = ["Pending Approval", "Pending", "Washing", "Ready", "Picked Up"];
-const maxClothesCount = 30;
-const dropWindow = { start: "08:00", end: "13:00", label: "8:00 AM - 1:00 PM" };
-
-function minutes(value: string) {
-  const [hour, minute] = value.split(":").map(Number);
-  return hour * 60 + minute;
-}
-
-function isDropWindowOpen() {
-  const now = new Date();
-  const current = now.getHours() * 60 + now.getMinutes();
-  return current >= minutes(dropWindow.start) && current <= minutes(dropWindow.end);
-}
+const fallbackMaxClothesCount = 30;
+const fallbackDropWindow = { start: "09:00", end: "13:00", label: "9:00 AM - 1:00 PM", status: "Unavailable" };
 
 function parseRecordDate(value?: string | null) {
   if (!value) return null;
@@ -63,7 +52,7 @@ function isThisWeek(record: LaundryBasket) {
   return weekStart(received).getTime() === weekStart(new Date()).getTime();
 }
 
-function clampClothes(value: string) {
+function clampClothes(value: string, maxClothesCount: number) {
   if (value.trim() === "") return "";
   return String(Math.min(maxClothesCount, Math.max(1, Number(value) || 1)));
 }
@@ -71,6 +60,7 @@ function clampClothes(value: string) {
 export default function Laundry() {
   const [records, setRecords] = useState<LaundryBasket[]>([]);
   const [overview, setOverview] = useState<StudentOverview | null>(null);
+  const [serviceWindows, setServiceWindows] = useState<ServiceWindows | null>(null);
   const [dropCount, setDropCount] = useState("1");
   const [isRequestingDrop, setIsRequestingDrop] = useState(false);
 
@@ -81,6 +71,7 @@ export default function Laundry() {
       setOverview(data);
       setRecords(data.laundry);
     }).catch(console.error);
+    api.serviceWindows().then(setServiceWindows).catch(() => undefined);
   }, []);
 
   const weeklyDrop = useMemo(
@@ -94,7 +85,9 @@ export default function Laundry() {
   const studentId = overview?.student.studentId;
   const studentName = overview?.student.name || "Student";
   const profilePhoto = overview?.student.photoUrl;
-  const dropOpen = isDropWindowOpen();
+  const dropWindow = serviceWindows?.laundry ?? fallbackDropWindow;
+  const maxClothesCount = serviceWindows?.laundryMaxClothes ?? fallbackMaxClothesCount;
+  const dropOpen = dropWindow.status === "Active";
   const activeDropTicket = weeklyDrop?.status === "Pending Approval" ? weeklyDrop : null;
   const droppedAlready = Boolean(weeklyDrop && weeklyDrop.status !== "Pending Approval");
   const dropQrPayload = activeDropTicket && studentId
@@ -184,7 +177,7 @@ export default function Laundry() {
                 max={maxClothesCount}
                 inputMode="numeric"
                 value={dropCount}
-                onChange={(event) => setDropCount(clampClothes(event.target.value))}
+                onChange={(event) => setDropCount(clampClothes(event.target.value, maxClothesCount))}
               />
             </div>
           </div>

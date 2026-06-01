@@ -2,37 +2,34 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { CheckCircle2, Clock3, QrCode as QrIcon, RefreshCw, TicketCheck, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/src/components/ui/button";
-import { api, type Meal, type StudentOverview } from "@/src/lib/api";
+import { api, type Meal, type ServiceWindows, type StudentOverview } from "@/src/lib/api";
 import { showToast } from "@/src/components/ui/toast";
 
-const mealWindows = [
-  { type: "Breakfast", start: "9:00", end: "4:45", label: "9:00 AM - 2:45 PM" },
-  { type: "Dinner", start: "17:00", end: "19:45", label: "5:00 PM - 7:45 PM" },
-];
-
-function minutes(value: string) {
-  const [hour, minute] = value.split(":").map(Number);
-  return hour * 60 + minute;
+function activeMealByStatus(meals: Meal[]) {
+  return meals.find((meal) => meal.status === "Active") ?? null;
 }
 
-function activeMealByTime(meals: Meal[]) {
-  const now = new Date();
-  const current = now.getHours() * 60 + now.getMinutes();
-  const window = mealWindows.find((item) => current >= minutes(item.start) && current <= minutes(item.end));
-  if (!window) return null;
-  return meals.find((meal) => meal.type === window.type) ?? null;
+function nextWindowLabel(meals: Meal[], serviceWindows: ServiceWindows | null) {
+  const next = meals.find((meal) => meal.status === "Upcoming") ?? meals[0];
+  if (next) return `${next.type} opens at ${next.windowLabel || `${next.startTime} - ${next.endTime}`}`;
+
+  const fallback = Object.entries(serviceWindows?.meals ?? {})[0];
+  if (fallback) return `${fallback[0]} opens at ${fallback[1].label}`;
+  return "Breakfast opens at 6:30 AM - 8:45 AM";
 }
 
-function nextWindowLabel() {
+function localDateText() {
   const now = new Date();
-  const current = now.getHours() * 60 + now.getMinutes();
-  const next = mealWindows.find((item) => current < minutes(item.start)) ?? mealWindows[0];
-  return `${next.type} opens at ${next.label}`;
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export default function QRCode() {
   const storedUser = useMemo(() => JSON.parse(localStorage.getItem("hamsUser") || "{}"), []);
   const [overview, setOverview] = useState<StudentOverview | null>(null);
+  const [serviceWindows, setServiceWindows] = useState<ServiceWindows | null>(null);
   const [nonce, setNonce] = useState(Date.now());
   const [isHoldingClaim, setIsHoldingClaim] = useState(false);
   const [holdProgress, setHoldProgress] = useState(0);
@@ -40,10 +37,10 @@ export default function QRCode() {
   const holdTimeoutRef = useRef<number | null>(null);
   const holdIntervalRef = useRef<number | null>(null);
   const studentId = overview?.student.studentId || storedUser.studentId || "240011223";
-  const activeMeal = activeMealByTime(overview?.meals ?? []);
+  const activeMeal = activeMealByStatus(overview?.meals ?? []);
   const activeUnclaimedMeal = activeMeal && !activeMeal.consumed ? activeMeal : null;
   const isSubscribed = overview?.student.mealSubscribed !== false;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateText();
   const mealStatus = activeMeal ? "Active" : "Inactive";
   const qrMealType = activeMeal?.type ?? "Inactive";
   const qrPayload = isSubscribed ? `HAMS-MEAL:${qrMealType}:${studentId}:${today}:${nonce}` : "";
@@ -53,6 +50,7 @@ export default function QRCode() {
 
   useEffect(() => {
     api.studentOverview(studentId).then(setOverview).catch(console.error);
+    api.serviceWindows().then(setServiceWindows).catch(() => undefined);
   }, [studentId]);
 
   useEffect(() => () => {
@@ -210,8 +208,8 @@ export default function QRCode() {
                     <p className="mt-1 text-base font-black text-neutral-950">{qrMealType}</p>
                     <p className="text-sm font-semibold text-neutral-500">
                       {activeMeal
-                        ? (activeMeal.windowLabel || mealWindows.find((item) => item.type === activeMeal.type)?.label)
-                        : nextWindowLabel()}
+                        ? (activeMeal.windowLabel || `${activeMeal.startTime} - ${activeMeal.endTime}`)
+                        : nextWindowLabel(overview?.meals ?? [], serviceWindows)}
                     </p>
                   </div>
                 </div>
@@ -259,8 +257,8 @@ export default function QRCode() {
                 <p className={`mt-1 text-xl font-black ${mealStatus === "Active" ? "text-green-900" : "text-amber-900"}`}>{mealStatus}</p>
                 <p className={`text-sm font-semibold ${mealStatus === "Active" ? "text-green-700" : "text-amber-700"}`}>
                   {activeMeal
-                    ? (activeMeal.windowLabel || mealWindows.find((item) => item.type === activeMeal.type)?.label)
-                    : nextWindowLabel()}
+                    ? (activeMeal.windowLabel || `${activeMeal.startTime} - ${activeMeal.endTime}`)
+                    : nextWindowLabel(overview?.meals ?? [], serviceWindows)}
                 </p>
               </div>
             </div>
@@ -282,7 +280,19 @@ export default function QRCode() {
       </motion.section>
 
       <section className="grid gap-3 sm:grid-cols-2">
-        {mealWindows.map((meal) => {
+        {(overview?.meals?.length
+          ? overview.meals
+          : Object.entries(serviceWindows?.meals ?? {}).map(([type, window]) => ({
+              id: type === "Breakfast" ? 1 : 2,
+              type,
+              weekday: "",
+              startTime: window.start,
+              endTime: window.end,
+              menu: "",
+              status: window.status,
+              windowLabel: window.label,
+            } as Meal))
+        ).map((meal) => {
           const isActive = activeMeal?.type === meal.type;
           return (
             <div key={meal.type} className={`rounded-2xl border p-4 ${isActive ? "border-green-200 bg-green-50" : "border-neutral-100 bg-white"}`}>
@@ -292,7 +302,7 @@ export default function QRCode() {
                 </div>
                 <div>
                   <p className="font-black text-neutral-950">{meal.type}</p>
-                  <p className="text-sm font-medium text-neutral-500">{meal.label}</p>
+                  <p className="text-sm font-medium text-neutral-500">{meal.windowLabel || `${meal.startTime} - ${meal.endTime}`}</p>
                 </div>
               </div>
               <p className="mt-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-neutral-500">

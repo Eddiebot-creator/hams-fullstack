@@ -6,7 +6,7 @@ import {
   Users, BarChart3, LogOut, Bell, ShieldCheck, Columns3, AlertTriangle, Database, CheckSquare, Plus, Settings
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { api, type Notification } from "@/src/lib/api";
+import { api, clearApiCache, type Notification } from "@/src/lib/api";
 import GlobalSearch from "./GlobalSearch";
 import RoleTips from "./RoleTips";
 import InstallPrompt from "./InstallPrompt";
@@ -68,6 +68,7 @@ export default function Layout({ role }: { role: keyof typeof navConfig }) {
   const signOut = () => {
     localStorage.removeItem("hamsUser");
     localStorage.removeItem("hamsToken");
+    clearApiCache();
     navigate("/login");
   };
 
